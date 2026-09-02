@@ -1,11 +1,9 @@
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
 
-from portfolio_agent.integrations.schwab_auth import get_access_token, ReauthorizationRequired
-
+from portfolio_agent.integrations.schwab_auth import get_access_token
 
 # =========================================================
 # Configuration
@@ -27,10 +25,12 @@ BENCHMARK_SYMBOL = "SPY"
 # Exceptions
 # =========================================================
 
+
 class SchwabAPIError(Exception):
     """
     Raised when Schwab returns an unsuccessful API response.
     """
+
     pass
 
 
@@ -44,8 +44,8 @@ def iso_utc(dt: datetime) -> str:
 # Schwab Client
 # =========================================================
 
-class SchwabClient:
 
+class SchwabClient:
     def __init__(self):
         self.trader_base_url = TRADER_BASE_URL
         self.market_data_base_url = MARKET_DATA_BASE_URL
@@ -121,9 +121,7 @@ class SchwabClient:
         Account hashes are used for account-specific requests.
         """
 
-        return self._trader_get(
-            "/accounts/accountNumbers"
-        )
+        return self._trader_get("/accounts/accountNumbers")
 
     # =====================================================
     # All Accounts
@@ -142,9 +140,7 @@ class SchwabClient:
         params = None
 
         if include_positions:
-            params = {
-                "fields": "positions"
-            }
+            params = {"fields": "positions"}
 
         return self._trader_get(
             "/accounts",
@@ -170,9 +166,7 @@ class SchwabClient:
         params = None
 
         if include_positions:
-            params = {
-                "fields": "positions"
-            }
+            params = {"fields": "positions"}
 
         return self._trader_get(
             f"/accounts/{account_hash}",
@@ -190,9 +184,7 @@ class SchwabClient:
         Returns Schwab's raw response.
         """
 
-        return self.get_accounts(
-            include_positions=True
-        )
+        return self.get_accounts(include_positions=True)
 
     # =====================================================
     # Transactions
@@ -316,9 +308,7 @@ class SchwabClient:
         params = None
 
         if fields:
-            params = {
-                "fields": fields
-            }
+            params = {"fields": fields}
 
         return self._market_get(
             f"/{symbol}/quotes",
@@ -355,10 +345,8 @@ class SchwabClient:
 
         params = {
             "symbol": symbol,
-            "needExtendedHoursData":
-                str(need_extended_hours_data).lower(),
-            "needPreviousClose":
-                str(need_previous_close).lower(),
+            "needExtendedHoursData": str(need_extended_hours_data).lower(),
+            "needPreviousClose": str(need_previous_close).lower(),
         }
 
         if period_type is not None:
@@ -460,9 +448,7 @@ class SchwabClient:
         Retrieve instrument information by CUSIP.
         """
 
-        return self._market_get(
-            f"/instruments/{cusip}"
-        )
+        return self._market_get(f"/instruments/{cusip}")
 
     # =====================================================
     # Position Symbol Extraction
@@ -480,23 +466,12 @@ class SchwabClient:
         symbols = set()
 
         for account_wrapper in accounts:
+            securities_account = account_wrapper.get("securitiesAccount", {})
 
-            securities_account = account_wrapper.get(
-                "securitiesAccount",
-                {}
-            )
-
-            positions = securities_account.get(
-                "positions",
-                []
-            )
+            positions = securities_account.get("positions", [])
 
             for position in positions:
-
-                instrument = position.get(
-                    "instrument",
-                    {}
-                )
+                instrument = position.get("instrument", {})
 
                 symbol = instrument.get("symbol")
 
@@ -524,14 +499,9 @@ class SchwabClient:
         if accounts is None:
             accounts = self.get_portfolio()
 
-        symbols = self.extract_position_symbols(
-            accounts
-        )
+        symbols = self.extract_position_symbols(accounts)
 
-        if (
-            include_benchmark
-            and BENCHMARK_SYMBOL not in symbols
-        ):
+        if include_benchmark and BENCHMARK_SYMBOL not in symbols:
             symbols.append(BENCHMARK_SYMBOL)
 
         if not symbols:
@@ -554,42 +524,30 @@ class SchwabClient:
         if accounts is None:
             accounts = self.get_portfolio()
 
-        symbols = self.extract_position_symbols(
-            accounts
-        )
+        symbols = self.extract_position_symbols(accounts)
 
-        if (
-            include_benchmark
-            and BENCHMARK_SYMBOL not in symbols
-        ):
+        if include_benchmark and BENCHMARK_SYMBOL not in symbols:
             symbols.append(BENCHMARK_SYMBOL)
 
         history = {}
 
         for symbol in symbols:
-
             try:
-
-                history[symbol] = (
-                    self.get_daily_price_history(
-                        symbol=symbol,
-                        period=1,
-                    )
+                history[symbol] = self.get_daily_price_history(
+                    symbol=symbol,
+                    period=1,
                 )
 
             except SchwabAPIError as error:
-
                 # One unusual instrument shouldn't prevent us
                 # from retrieving data for every other holding.
-                history[symbol] = {
-                    "_error": str(error)
-                }
+                history[symbol] = {"_error": str(error)}
 
         return history
 
 
-
 # =========================================================
+
 
 def build_development_snapshot(client):
     """
@@ -621,29 +579,19 @@ def build_development_snapshot(client):
     account_activity = []
 
     for account_mapping in account_numbers:
-
-        account_hash = (
-            account_mapping["hashValue"]
-        )
+        account_hash = account_mapping["hashValue"]
 
         try:
-
-            transactions = (
-                client.get_transactions(
-                    account_hash=account_hash,
-                    start_date=start_date,
-                    end_date=end_date,
-                )
+            transactions = client.get_transactions(
+                account_hash=account_hash,
+                start_date=start_date,
+                end_date=end_date,
             )
 
         except SchwabAPIError as error:
-
-            transactions = {
-                "_error": str(error)
-            }
+            transactions = {"_error": str(error)}
 
         try:
-
             orders = client.get_orders(
                 account_hash=account_hash,
                 from_entered_time=start_date,
@@ -651,26 +599,21 @@ def build_development_snapshot(client):
             )
 
         except SchwabAPIError as error:
+            orders = {"_error": str(error)}
 
-            orders = {
-                "_error": str(error)
+        account_activity.append(
+            {
+                "account_hash": account_hash,
+                "transactions": transactions,
+                "orders": orders,
             }
-
-        account_activity.append({
-            "account_hash": account_hash,
-            "transactions": transactions,
-            "orders": orders,
-        })
+        )
 
     # =====================================================
     # Portfolio Symbols
     # =====================================================
 
-    symbols = (
-        client.extract_position_symbols(
-            accounts
-        )
-    )
+    symbols = client.extract_position_symbols(accounts)
 
     # =====================================================
     # Quotes
@@ -685,11 +628,9 @@ def build_development_snapshot(client):
     # Price History
     # =====================================================
 
-    price_history = (
-        client.get_portfolio_price_history(
-            accounts=accounts,
-            include_benchmark=True,
-        )
+    price_history = client.get_portfolio_price_history(
+        accounts=accounts,
+        include_benchmark=True,
     )
 
     # =====================================================
@@ -697,18 +638,10 @@ def build_development_snapshot(client):
     # =====================================================
 
     try:
-
-        market_hours = (
-            client.get_market_hours(
-                markets="equity"
-            )
-        )
+        market_hours = client.get_market_hours(markets="equity")
 
     except SchwabAPIError as error:
-
-        market_hours = {
-            "_error": str(error)
-        }
+        market_hours = {"_error": str(error)}
 
     # =====================================================
     # Complete Snapshot
@@ -716,15 +649,10 @@ def build_development_snapshot(client):
 
     return {
         "retrieved_at": iso_utc(now),
-
         "benchmark": BENCHMARK_SYMBOL,
-
         "portfolio_symbols": symbols,
-
         "accounts": accounts,
-
         "account_activity": account_activity,
-
         "market_data": {
             "quotes": quotes,
             "price_history": price_history,

@@ -38,9 +38,7 @@ class PortfolioAdvisor:
         api_key = api_key or os.getenv("OPENAI_API_KEY")
 
         if not api_key:
-            raise PortfolioAdvisorError(
-                "OPENAI_API_KEY was not found in the environment."
-            )
+            raise PortfolioAdvisorError("OPENAI_API_KEY was not found in the environment.")
 
         self.client = OpenAI(api_key=api_key)
 
@@ -130,9 +128,7 @@ class PortfolioAdvisor:
             ) from error
 
         try:
-            result = json.loads(
-                response.output_text
-            )
+            result = json.loads(response.output_text)
 
         except (
             TypeError,
@@ -146,12 +142,8 @@ class PortfolioAdvisor:
         output_tokens = response.usage.output_tokens
 
         estimated_cost = (
-            input_tokens
-            / 1_000_000
-            * INPUT_COST_PER_MILLION
-            + output_tokens
-            / 1_000_000
-            * OUTPUT_COST_PER_MILLION
+            input_tokens / 1_000_000 * INPUT_COST_PER_MILLION
+            + output_tokens / 1_000_000 * OUTPUT_COST_PER_MILLION
         )
 
         return PositionAdvice(
@@ -222,18 +214,13 @@ class PortfolioAdvisor:
                     2,
                 ),
             },
-            "recent_movement_research": (
-                movement_explanation
-            ),
+            "recent_movement_research": (movement_explanation),
             "forward_research": {
                 "outlook": thesis.outlook,
                 "confidence": thesis.confidence,
                 "summary": thesis.summary,
                 "change_type": thesis.change_type,
                 "change_summary": thesis.change_summary,
-                "watch_items": [
-                    item.topic
-                    for item in thesis.watch_items
-                ],
+                "watch_items": [item.topic for item in thesis.watch_items],
             },
         }

@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
 
 from portfolio_agent.integrations.schwab import SchwabClient
-from portfolio_agent.integrations.schwab_auth import ReauthorizationRequired
-
 
 # =========================================================
 # Position Model
 # =========================================================
+
 
 @dataclass
 class Position:
@@ -28,6 +27,7 @@ class Position:
 # Account Model
 # =========================================================
 
+
 @dataclass
 class Account:
     """
@@ -44,6 +44,7 @@ class Account:
 # Portfolio Model
 # =========================================================
 
+
 @dataclass
 class Portfolio:
     """
@@ -54,13 +55,9 @@ class Portfolio:
     total_value: float
     cash: float
 
-    accounts: list[Account] = field(
-        default_factory=list
-    )
+    accounts: list[Account] = field(default_factory=list)
 
-    positions: list[Position] = field(
-        default_factory=list
-    )
+    positions: list[Position] = field(default_factory=list)
 
     # =====================================================
     # Build Portfolio From Schwab
@@ -84,43 +81,23 @@ class Portfolio:
         # -------------------------------------------------
 
         for raw_account in raw_accounts:
-
-            securities_account = raw_account.get(
-                "securitiesAccount",
-                {}
-            )
+            securities_account = raw_account.get("securitiesAccount", {})
 
             # ---------------------------------------------
             # Account information
             # ---------------------------------------------
 
-            account_type = securities_account.get(
-                "type",
-                "UNKNOWN"
-            )
+            account_type = securities_account.get("type", "UNKNOWN")
 
             # ---------------------------------------------
             # Balances
             # ---------------------------------------------
 
-            balances = securities_account.get(
-                "currentBalances",
-                {}
-            )
+            balances = securities_account.get("currentBalances", {})
 
-            total_value = float(
-                balances.get(
-                    "liquidationValue",
-                    0.0
-                )
-            )
+            total_value = float(balances.get("liquidationValue", 0.0))
 
-            cash = float(
-                balances.get(
-                    "cashBalance",
-                    0.0
-                )
-            )
+            cash = float(balances.get("cashBalance", 0.0))
 
             # ---------------------------------------------
             # Positions
@@ -128,63 +105,27 @@ class Portfolio:
 
             positions = []
 
-            raw_positions = securities_account.get(
-                "positions",
-                []
-            )
+            raw_positions = securities_account.get("positions", [])
 
             for raw_position in raw_positions:
+                instrument = raw_position.get("instrument", {})
 
-                instrument = raw_position.get(
-                    "instrument",
-                    {}
-                )
+                symbol = instrument.get("symbol", "UNKNOWN")
 
-                symbol = instrument.get(
-                    "symbol",
-                    "UNKNOWN"
-                )
+                asset_type = instrument.get("assetType", "UNKNOWN")
 
-                asset_type = instrument.get(
-                    "assetType",
-                    "UNKNOWN"
-                )
+                long_quantity = float(raw_position.get("longQuantity", 0.0))
 
-                long_quantity = float(
-                    raw_position.get(
-                        "longQuantity",
-                        0.0
-                    )
-                )
-
-                short_quantity = float(
-                    raw_position.get(
-                        "shortQuantity",
-                        0.0
-                    )
-                )
+                short_quantity = float(raw_position.get("shortQuantity", 0.0))
 
                 # Positive quantity = long
                 # Negative quantity = short
 
-                quantity = (
-                    long_quantity
-                    - short_quantity
-                )
+                quantity = long_quantity - short_quantity
 
-                average_price = float(
-                    raw_position.get(
-                        "averagePrice",
-                        0.0
-                    )
-                )
+                average_price = float(raw_position.get("averagePrice", 0.0))
 
-                market_value = float(
-                    raw_position.get(
-                        "marketValue",
-                        0.0
-                    )
-                )
+                market_value = float(raw_position.get("marketValue", 0.0))
 
                 position = Position(
                     symbol=symbol,
@@ -234,6 +175,7 @@ class Portfolio:
 # Portfolio Loader
 # =========================================================
 
+
 def load_portfolio():
     """
     Retrieve the current portfolio from Schwab and convert
@@ -249,12 +191,9 @@ def load_portfolio():
 
     raw_accounts = client.get_portfolio()
 
-    return Portfolio.from_schwab(
-        raw_accounts
-    )
+    return Portfolio.from_schwab(raw_accounts)
 
 
 # =========================================================
 # Development Display
 # =========================================================
-

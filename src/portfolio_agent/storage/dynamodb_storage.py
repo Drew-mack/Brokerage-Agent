@@ -4,12 +4,11 @@ from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Key
 
+from portfolio_agent.config import settings
 from portfolio_agent.storage.serialization import (
     portfolio_to_snapshot,
     snapshot_to_portfolio,
 )
-from portfolio_agent.config import settings
-
 
 DEFAULT_PORTFOLIO_ID = "main"
 
@@ -23,11 +22,7 @@ class DynamoDBStorageError(Exception):
 def running_in_lambda():
     """Return whether the application is running inside AWS Lambda."""
 
-    return bool(
-        os.getenv(
-            "AWS_LAMBDA_FUNCTION_NAME"
-        )
-    )
+    return bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 
 
 def get_table():
@@ -50,18 +45,12 @@ def get_table():
                 region_name=settings.aws_region,
             )
 
-            dynamodb = session.resource(
-                "dynamodb"
-            )
+            dynamodb = session.resource("dynamodb")
 
-        return dynamodb.Table(
-            settings.snapshots_table_name
-        )
+        return dynamodb.Table(settings.snapshots_table_name)
 
     except Exception as error:
-        raise DynamoDBStorageError(
-            f"Could not connect to DynamoDB: {error}"
-        ) from error
+        raise DynamoDBStorageError(f"Could not connect to DynamoDB: {error}") from error
 
 
 def _convert_floats_to_decimal(value):
@@ -71,16 +60,10 @@ def _convert_floats_to_decimal(value):
         return Decimal(str(value))
 
     if isinstance(value, list):
-        return [
-            _convert_floats_to_decimal(item)
-            for item in value
-        ]
+        return [_convert_floats_to_decimal(item) for item in value]
 
     if isinstance(value, dict):
-        return {
-            key: _convert_floats_to_decimal(item)
-            for key, item in value.items()
-        }
+        return {key: _convert_floats_to_decimal(item) for key, item in value.items()}
 
     return value
 
@@ -104,30 +87,22 @@ def save_snapshot(
 ):
     """Save a Portfolio snapshot to DynamoDB."""
 
-    snapshot = portfolio_to_snapshot(
-        portfolio
-    )
+    snapshot = portfolio_to_snapshot(portfolio)
 
     item = {
         "portfolio_id": portfolio_id,
         **snapshot,
     }
 
-    item = _convert_floats_to_decimal(
-        item
-    )
+    item = _convert_floats_to_decimal(item)
 
     try:
         table = get_table()
 
-        table.put_item(
-            Item=item
-        )
+        table.put_item(Item=item)
 
     except Exception as error:
-        raise DynamoDBStorageError(
-            f"Could not save snapshot to DynamoDB: {error}"
-        ) from error
+        raise DynamoDBStorageError(f"Could not save snapshot to DynamoDB: {error}") from error
 
     return snapshot["timestamp"]
 
@@ -141,30 +116,20 @@ def get_latest_snapshot(
         table = get_table()
 
         response = table.query(
-            KeyConditionExpression=Key(
-                "portfolio_id"
-            ).eq(portfolio_id),
+            KeyConditionExpression=Key("portfolio_id").eq(portfolio_id),
             ScanIndexForward=False,
             Limit=1,
         )
 
     except Exception as error:
-        raise DynamoDBStorageError(
-            f"Could not retrieve snapshot "
-            f"from DynamoDB: {error}"
-        ) from error
+        raise DynamoDBStorageError(f"Could not retrieve snapshot from DynamoDB: {error}") from error
 
-    items = response.get(
-        "Items",
-        []
-    )
+    items = response.get("Items", [])
 
     if not items:
         return None
 
-    return _snapshot_from_item(
-        items[0]
-    )
+    return _snapshot_from_item(items[0])
 
 
 def get_latest_portfolio(
@@ -175,16 +140,12 @@ def get_latest_portfolio(
     the Portfolio object.
     """
 
-    snapshot = get_latest_snapshot(
-        portfolio_id
-    )
+    snapshot = get_latest_snapshot(portfolio_id)
 
     if snapshot is None:
         return None
 
-    return snapshot_to_portfolio(
-        snapshot
-    )
+    return snapshot_to_portfolio(snapshot)
 
 
 def get_snapshot_at_or_before(
@@ -201,12 +162,7 @@ def get_snapshot_at_or_before(
 
         response = table.query(
             KeyConditionExpression=(
-                Key("portfolio_id").eq(
-                    portfolio_id
-                )
-                & Key("timestamp").lte(
-                    timestamp
-                )
+                Key("portfolio_id").eq(portfolio_id) & Key("timestamp").lte(timestamp)
             ),
             ScanIndexForward=False,
             Limit=1,
@@ -214,21 +170,15 @@ def get_snapshot_at_or_before(
 
     except Exception as error:
         raise DynamoDBStorageError(
-            f"Could not retrieve historical "
-            f"snapshot from DynamoDB: {error}"
+            f"Could not retrieve historical snapshot from DynamoDB: {error}"
         ) from error
 
-    items = response.get(
-        "Items",
-        []
-    )
+    items = response.get("Items", [])
 
     if not items:
         return None
 
-    return _snapshot_from_item(
-        items[0]
-    )
+    return _snapshot_from_item(items[0])
 
 
 def get_portfolio_at_or_before(
@@ -248,9 +198,7 @@ def get_portfolio_at_or_before(
     if snapshot is None:
         return None
 
-    return snapshot_to_portfolio(
-        snapshot
-    )
+    return snapshot_to_portfolio(snapshot)
 
 
 def get_all_snapshots(
@@ -262,26 +210,18 @@ def get_all_snapshots(
         table = get_table()
 
         response = table.query(
-            KeyConditionExpression=Key(
-                "portfolio_id"
-            ).eq(portfolio_id),
+            KeyConditionExpression=Key("portfolio_id").eq(portfolio_id),
             ScanIndexForward=True,
         )
 
     except Exception as error:
         raise DynamoDBStorageError(
-            f"Could not retrieve snapshots "
-            f"from DynamoDB: {error}"
+            f"Could not retrieve snapshots from DynamoDB: {error}"
         ) from error
 
     snapshots = []
 
-    for item in response.get(
-        "Items",
-        []
-    ):
-        snapshots.append(
-            _snapshot_from_item(item)
-        )
+    for item in response.get("Items", []):
+        snapshots.append(_snapshot_from_item(item))
 
     return snapshots

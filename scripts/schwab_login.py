@@ -2,7 +2,5 @@
 
 from portfolio_agent.integrations.schwab_auth import authenticate
 
-
 if __name__ == "__main__":
     authenticate()
-

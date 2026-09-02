@@ -7,7 +7,6 @@ from portfolio_agent.storage.serialization import (
     snapshot_to_portfolio,
 )
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 DATA_DIR = PROJECT_ROOT / "data"
@@ -35,13 +34,9 @@ def save_snapshot(portfolio):
 
     snapshot = portfolio_to_snapshot(portfolio)
 
-    timestamp = datetime.fromisoformat(
-        snapshot["timestamp"]
-    )
+    timestamp = datetime.fromisoformat(snapshot["timestamp"])
 
-    filename = timestamp.strftime(
-        "%Y-%m-%dT%H-%M-%SZ.json"
-    )
+    filename = timestamp.strftime("%Y-%m-%dT%H-%M-%SZ.json")
 
     output_file = SNAPSHOT_DIR / filename
 
@@ -58,9 +53,7 @@ def save_snapshot(portfolio):
             )
 
     except OSError as error:
-        raise LocalStorageError(
-            f"Could not save portfolio snapshot: {error}"
-        ) from error
+        raise LocalStorageError(f"Could not save portfolio snapshot: {error}") from error
 
     return output_file
 
@@ -82,9 +75,7 @@ def load_snapshot_file(filepath):
         OSError,
         json.JSONDecodeError,
     ) as error:
-        raise LocalStorageError(
-            f"Could not load portfolio snapshot: {error}"
-        ) from error
+        raise LocalStorageError(f"Could not load portfolio snapshot: {error}") from error
 
 
 def get_snapshot_files():
@@ -95,9 +86,7 @@ def get_snapshot_files():
     if not SNAPSHOT_DIR.exists():
         return []
 
-    return sorted(
-        SNAPSHOT_DIR.glob("*.json")
-    )
+    return sorted(SNAPSHOT_DIR.glob("*.json"))
 
 
 def get_latest_snapshot():
@@ -110,9 +99,7 @@ def get_latest_snapshot():
     if not snapshot_files:
         return None
 
-    return load_snapshot_file(
-        snapshot_files[-1]
-    )
+    return load_snapshot_file(snapshot_files[-1])
 
 
 def get_latest_portfolio():
@@ -133,7 +120,4 @@ def get_all_snapshots():
     Return all locally stored snapshots.
     """
 
-    return [
-        load_snapshot_file(filepath)
-        for filepath in get_snapshot_files()
-    ]
+    return [load_snapshot_file(filepath) for filepath in get_snapshot_files()]

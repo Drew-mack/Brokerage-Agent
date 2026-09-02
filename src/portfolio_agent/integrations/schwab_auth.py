@@ -3,13 +3,12 @@ import os
 import time
 import webbrowser
 from pathlib import Path
-from urllib.parse import quote, unquote, urlparse, parse_qs
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import requests
 from dotenv import load_dotenv
 
 from portfolio_agent.integrations.auth_storage.secrets_token_storage import SecretsTokenStorage
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -39,17 +38,13 @@ class ReauthorizationRequired(Exception):
 def running_in_lambda():
     """Return True when the application is running in AWS Lambda."""
 
-    return bool(
-        os.getenv("AWS_LAMBDA_FUNCTION_NAME")
-    )
+    return bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 
 
 def get_secret_storage():
     """Create the Secrets Manager token storage backend."""
 
-    return SecretsTokenStorage(
-        secret_name="portfolio-agent/schwab"
-    )
+    return SecretsTokenStorage(secret_name="portfolio-agent/schwab")
 
 
 def load_config():
@@ -69,15 +64,9 @@ def load_config():
         }
 
     return {
-        "client_id": os.getenv(
-            "SCHWAB_CLIENT_ID"
-        ),
-        "client_secret": os.getenv(
-            "SCHWAB_CLIENT_SECRET"
-        ),
-        "callback_url": os.getenv(
-            "SCHWAB_CALLBACK_URL"
-        ),
+        "client_id": os.getenv("SCHWAB_CLIENT_ID"),
+        "client_secret": os.getenv("SCHWAB_CLIENT_SECRET"),
+        "callback_url": os.getenv("SCHWAB_CALLBACK_URL"),
     }
 
 
@@ -87,19 +76,13 @@ def validate_config():
     config = load_config()
 
     if not config["client_id"]:
-        raise ValueError(
-            "SCHWAB_CLIENT_ID is missing."
-        )
+        raise ValueError("SCHWAB_CLIENT_ID is missing.")
 
     if not config["client_secret"]:
-        raise ValueError(
-            "SCHWAB_CLIENT_SECRET is missing."
-        )
+        raise ValueError("SCHWAB_CLIENT_SECRET is missing.")
 
     if not config["callback_url"]:
-        raise ValueError(
-            "SCHWAB_CALLBACK_URL is missing."
-        )
+        raise ValueError("SCHWAB_CALLBACK_URL is missing.")
 
     return config
 
@@ -128,9 +111,7 @@ def write_tokens(tokens):
     """
 
     if running_in_lambda():
-        get_secret_storage().save_tokens(
-            tokens
-        )
+        get_secret_storage().save_tokens(tokens)
         return
 
     with open(TOKEN_FILE, "w") as file:
@@ -172,9 +153,7 @@ def save_refreshed_tokens(
 
     new_tokens["access_token_created_at"] = now
 
-    new_tokens["refresh_token_created_at"] = (
-        old_tokens["refresh_token_created_at"]
-    )
+    new_tokens["refresh_token_created_at"] = old_tokens["refresh_token_created_at"]
 
     write_tokens(new_tokens)
 
@@ -185,9 +164,7 @@ def access_token_is_valid(tokens):
     if not tokens:
         return False
 
-    created_at = tokens.get(
-        "access_token_created_at"
-    )
+    created_at = tokens.get("access_token_created_at")
 
     if created_at is None:
         return False
@@ -197,14 +174,9 @@ def access_token_is_valid(tokens):
         ACCESS_TOKEN_LIFETIME,
     )
 
-    expires_at = (
-        int(created_at)
-        + int(expires_in)
-    )
+    expires_at = int(created_at) + int(expires_in)
 
-    return time.time() < (
-        expires_at - EXPIRATION_BUFFER
-    )
+    return time.time() < (expires_at - EXPIRATION_BUFFER)
 
 
 def refresh_token_is_valid(tokens):
@@ -216,21 +188,14 @@ def refresh_token_is_valid(tokens):
     if not tokens:
         return False
 
-    created_at = tokens.get(
-        "refresh_token_created_at"
-    )
+    created_at = tokens.get("refresh_token_created_at")
 
     if created_at is None:
         return False
 
-    expires_at = (
-        int(created_at)
-        + REFRESH_TOKEN_LIFETIME
-    )
+    expires_at = int(created_at) + REFRESH_TOKEN_LIFETIME
 
-    return time.time() < (
-        expires_at - EXPIRATION_BUFFER
-    )
+    return time.time() < (expires_at - EXPIRATION_BUFFER)
 
 
 def refresh_access_token(old_tokens):
@@ -241,26 +206,17 @@ def refresh_access_token(old_tokens):
 
     config = validate_config()
 
-    if not refresh_token_is_valid(
-        old_tokens
-    ):
+    if not refresh_token_is_valid(old_tokens):
         raise ReauthorizationRequired(
-            "Schwab authorization has expired. "
-            "Full OAuth reauthorization is required."
+            "Schwab authorization has expired. Full OAuth reauthorization is required."
         )
 
-    refresh_token = old_tokens.get(
-        "refresh_token"
-    )
+    refresh_token = old_tokens.get("refresh_token")
 
     if not refresh_token:
-        raise ReauthorizationRequired(
-            "No Schwab refresh token is available."
-        )
+        raise ReauthorizationRequired("No Schwab refresh token is available.")
 
-    print(
-        "Access token expired. Refreshing..."
-    )
+    print("Access token expired. Refreshing...")
 
     response = requests.post(
         TOKEN_URL,
@@ -268,10 +224,7 @@ def refresh_access_token(old_tokens):
             config["client_id"],
             config["client_secret"],
         ),
-        headers={
-            "Content-Type":
-                "application/x-www-form-urlencoded"
-        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
         data={
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
@@ -281,8 +234,7 @@ def refresh_access_token(old_tokens):
 
     if not response.ok:
         raise ReauthorizationRequired(
-            "Schwab rejected the refresh request. "
-            "Full OAuth reauthorization may be required."
+            "Schwab rejected the refresh request. Full OAuth reauthorization may be required."
         )
 
     new_tokens = response.json()
@@ -292,9 +244,7 @@ def refresh_access_token(old_tokens):
         old_tokens,
     )
 
-    print(
-        "Access token refreshed successfully."
-    )
+    print("Access token refreshed successfully.")
 
     return new_tokens["access_token"]
 
@@ -309,16 +259,10 @@ def get_access_token():
     tokens = load_tokens()
 
     if not tokens:
-        raise ReauthorizationRequired(
-            "No Schwab authorization exists."
-        )
+        raise ReauthorizationRequired("No Schwab authorization exists.")
 
-    if not refresh_token_is_valid(
-        tokens
-    ):
-        raise ReauthorizationRequired(
-            "Schwab authorization has expired."
-        )
+    if not refresh_token_is_valid(tokens):
+        raise ReauthorizationRequired("Schwab authorization has expired.")
 
     if access_token_is_valid(tokens):
         return tokens["access_token"]
@@ -348,23 +292,14 @@ def extract_authorization_code(
     the final callback URL.
     """
 
-    parsed_url = urlparse(
-        redirect_url
-    )
+    parsed_url = urlparse(redirect_url)
 
-    query = parse_qs(
-        parsed_url.query
-    )
+    query = parse_qs(parsed_url.query)
 
     if "code" not in query:
-        raise ValueError(
-            "No authorization code found "
-            "in redirect URL."
-        )
+        raise ValueError("No authorization code found in redirect URL.")
 
-    return unquote(
-        query["code"][0]
-    )
+    return unquote(query["code"][0])
 
 
 def exchange_code_for_tokens(code):
@@ -381,24 +316,17 @@ def exchange_code_for_tokens(code):
             config["client_id"],
             config["client_secret"],
         ),
-        headers={
-            "Content-Type":
-                "application/x-www-form-urlencoded"
-        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
         data={
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": config[
-                "callback_url"
-            ],
+            "redirect_uri": config["callback_url"],
         },
         timeout=30,
     )
 
     if not response.ok:
-        print(
-            "Schwab token request failed."
-        )
+        print("Schwab token request failed.")
 
         print(
             "Status:",
@@ -424,65 +352,33 @@ def authenticate():
     """
 
     if running_in_lambda():
-        raise RuntimeError(
-            "Interactive Schwab authorization "
-            "cannot run inside Lambda."
-        )
+        raise RuntimeError("Interactive Schwab authorization cannot run inside Lambda.")
 
-    authorization_url = (
-        build_authorization_url()
-    )
+    authorization_url = build_authorization_url()
 
-    print(
-        "\nOpening Schwab authorization page..."
-    )
+    print("\nOpening Schwab authorization page...")
 
-    webbrowser.open(
-        authorization_url
-    )
+    webbrowser.open(authorization_url)
 
-    print(
-        "\nLog into Schwab and authorize "
-        "your account(s)."
-    )
+    print("\nLog into Schwab and authorize your account(s).")
 
-    print(
-        "\nAfter Schwab redirects you, "
-        "the page may fail to load."
-    )
+    print("\nAfter Schwab redirects you, the page may fail to load.")
 
-    print(
-        "Copy the ENTIRE URL from your "
-        "browser's address bar."
-    )
+    print("Copy the ENTIRE URL from your browser's address bar.")
 
-    redirect_url = input(
-        "\nPaste the redirect URL here:\n\n"
-    ).strip()
+    redirect_url = input("\nPaste the redirect URL here:\n\n").strip()
 
-    code = extract_authorization_code(
-        redirect_url
-    )
+    code = extract_authorization_code(redirect_url)
 
-    print(
-        "\nAuthorization code received."
-    )
+    print("\nAuthorization code received.")
 
-    print(
-        "Exchanging code for tokens..."
-    )
+    print("Exchanging code for tokens...")
 
-    tokens = exchange_code_for_tokens(
-        code
-    )
+    tokens = exchange_code_for_tokens(code)
 
-    save_initial_tokens(
-        tokens
-    )
+    save_initial_tokens(tokens)
 
-    print(
-        "\nSUCCESS: Schwab authorization completed."
-    )
+    print("\nSUCCESS: Schwab authorization completed.")
 
     print(
         "Access token expires in:",
@@ -490,9 +386,4 @@ def authenticate():
         "seconds",
     )
 
-    print(
-        "Refresh authorization valid "
-        "for approximately 7 days."
-    )
-
-
+    print("Refresh authorization valid for approximately 7 days.")

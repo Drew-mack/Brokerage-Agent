@@ -4,7 +4,6 @@ import boto3
 
 from portfolio_agent.config import settings
 
-
 DEFAULT_SECRET_NAME = "portfolio-agent/schwab"
 
 
@@ -19,9 +18,7 @@ class SecretsTokenStorage:
         self.secret_name = secret_name
 
         if aws_profile:
-            session = boto3.Session(
-                profile_name=aws_profile
-            )
+            session = boto3.Session(profile_name=aws_profile)
         else:
             session = boto3.Session()
 
@@ -31,13 +28,9 @@ class SecretsTokenStorage:
         )
 
     def _load_secret(self) -> dict:
-        response = self.client.get_secret_value(
-            SecretId=self.secret_name
-        )
+        response = self.client.get_secret_value(SecretId=self.secret_name)
 
-        return json.loads(
-            response["SecretString"]
-        )
+        return json.loads(response["SecretString"])
 
     def load_tokens(self) -> dict:
         """Load only the dynamic Schwab OAuth token state."""
@@ -52,11 +45,7 @@ class SecretsTokenStorage:
             "refresh_token_created_at",
         }
 
-        return {
-            key: secret[key]
-            for key in token_keys
-            if key in secret
-        }
+        return {key: secret[key] for key in token_keys if key in secret}
 
     def save_tokens(self, tokens: dict) -> None:
         """
@@ -79,13 +68,7 @@ class SecretsTokenStorage:
         secret = self._load_secret()
 
         return {
-            "client_id": secret.get(
-                "SCHWAB_CLIENT_ID"
-            ),
-            "client_secret": secret.get(
-                "SCHWAB_CLIENT_SECRET"
-            ),
-            "callback_url": secret.get(
-                "SCHWAB_CALLBACK_URL"
-            ),
+            "client_id": secret.get("SCHWAB_CLIENT_ID"),
+            "client_secret": secret.get("SCHWAB_CLIENT_SECRET"),
+            "callback_url": secret.get("SCHWAB_CALLBACK_URL"),
         }

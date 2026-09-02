@@ -22,9 +22,7 @@ class SESEmailSender:
                 region_name=aws_region,
             )
 
-            self.client = session.client(
-                "ses"
-            )
+            self.client = session.client("ses")
         else:
             self.client = boto3.client(
                 "ses",
@@ -39,10 +37,7 @@ class SESEmailSender:
     ) -> str:
         """Send one portfolio email and return the SES message ID."""
 
-        source = (
-            f"{self.sender_name} "
-            f"<{self.sender_email}>"
-        )
+        source = f"{self.sender_name} <{self.sender_email}>"
 
         body = {
             "Html": {
@@ -59,11 +54,7 @@ class SESEmailSender:
 
         response = self.client.send_email(
             Source=source,
-            Destination={
-                "ToAddresses": [
-                    self.recipient_email
-                ]
-            },
+            Destination={"ToAddresses": [self.recipient_email]},
             Message={
                 "Subject": {
                     "Charset": "UTF-8",

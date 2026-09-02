@@ -29,4 +29,3 @@ def test_portfolio_normalizes_accounts_and_positions():
     assert portfolio.cash == 250.0
     assert portfolio.positions[0].symbol == "VOO"
     assert portfolio.positions[0].quantity == 2.0
-

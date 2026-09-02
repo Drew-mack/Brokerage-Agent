@@ -8,7 +8,6 @@ from boto3.dynamodb.conditions import Key
 from portfolio_agent.config import settings
 
 
-
 class ThesisStorageError(Exception):
     """Raised when forward-thesis storage fails."""
 
@@ -18,11 +17,7 @@ class ThesisStorageError(Exception):
 def running_in_lambda():
     """Return whether the application is running inside AWS Lambda."""
 
-    return bool(
-        os.getenv(
-            "AWS_LAMBDA_FUNCTION_NAME"
-        )
-    )
+    return bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 
 
 def get_table():
@@ -45,18 +40,12 @@ def get_table():
                 region_name=settings.aws_region,
             )
 
-            dynamodb = session.resource(
-                "dynamodb"
-            )
+            dynamodb = session.resource("dynamodb")
 
-        return dynamodb.Table(
-            settings.theses_table_name
-        )
+        return dynamodb.Table(settings.theses_table_name)
 
     except Exception as error:
-        raise ThesisStorageError(
-            f"Could not connect to thesis table: {error}"
-        ) from error
+        raise ThesisStorageError(f"Could not connect to thesis table: {error}") from error
 
 
 def _convert_floats_to_decimal(value):
@@ -66,16 +55,10 @@ def _convert_floats_to_decimal(value):
         return Decimal(str(value))
 
     if isinstance(value, list):
-        return [
-            _convert_floats_to_decimal(item)
-            for item in value
-        ]
+        return [_convert_floats_to_decimal(item) for item in value]
 
     if isinstance(value, dict):
-        return {
-            key: _convert_floats_to_decimal(item)
-            for key, item in value.items()
-        }
+        return {key: _convert_floats_to_decimal(item) for key, item in value.items()}
 
     return value
 
@@ -87,9 +70,7 @@ def save_thesis(
 ):
     """Persist one forward-looking company thesis."""
 
-    timestamp = datetime.now(
-        timezone.utc
-    ).isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     item = {
         "symbol": symbol.upper(),
@@ -102,9 +83,7 @@ def save_thesis(
         "watch_items": [
             {
                 "topic": watch_item.topic,
-                "supporting_article_ids": (
-                    watch_item.supporting_article_ids
-                ),
+                "supporting_article_ids": (watch_item.supporting_article_ids),
             }
             for watch_item in analysis.watch_items
         ],
@@ -113,30 +92,21 @@ def save_thesis(
                 "headline": article.headline,
                 "source": article.source,
                 "url": article.url,
-                "published_at": (
-                    article.published_at.isoformat()
-                ),
+                "published_at": (article.published_at.isoformat()),
             }
             for article in supporting_articles
         ],
     }
 
-    item = _convert_floats_to_decimal(
-        item
-    )
+    item = _convert_floats_to_decimal(item)
 
     try:
         table = get_table()
 
-        table.put_item(
-            Item=item
-        )
+        table.put_item(Item=item)
 
     except Exception as error:
-        raise ThesisStorageError(
-            f"Could not save thesis for "
-            f"{symbol.upper()}: {error}"
-        ) from error
+        raise ThesisStorageError(f"Could not save thesis for {symbol.upper()}: {error}") from error
 
     return timestamp
 
@@ -150,23 +120,17 @@ def get_latest_thesis(
         table = get_table()
 
         response = table.query(
-            KeyConditionExpression=Key(
-                "symbol"
-            ).eq(symbol.upper()),
+            KeyConditionExpression=Key("symbol").eq(symbol.upper()),
             ScanIndexForward=False,
             Limit=1,
         )
 
     except Exception as error:
         raise ThesisStorageError(
-            f"Could not retrieve thesis for "
-            f"{symbol.upper()}: {error}"
+            f"Could not retrieve thesis for {symbol.upper()}: {error}"
         ) from error
 
-    items = response.get(
-        "Items",
-        []
-    )
+    items = response.get("Items", [])
 
     if not items:
         return None
@@ -183,19 +147,13 @@ def get_thesis_history(
         table = get_table()
 
         response = table.query(
-            KeyConditionExpression=Key(
-                "symbol"
-            ).eq(symbol.upper()),
+            KeyConditionExpression=Key("symbol").eq(symbol.upper()),
             ScanIndexForward=True,
         )
 
     except Exception as error:
         raise ThesisStorageError(
-            f"Could not retrieve thesis history for "
-            f"{symbol.upper()}: {error}"
+            f"Could not retrieve thesis history for {symbol.upper()}: {error}"
         ) from error
 
-    return response.get(
-        "Items",
-        []
-    )
+    return response.get("Items", [])

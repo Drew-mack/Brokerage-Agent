@@ -17,17 +17,9 @@ def load_api_keys():
         region_name=settings.aws_region,
     )
 
-    response = (
-        client.get_secret_value(
-            SecretId=(
-                settings.api_keys_secret_name
-            )
-        )
-    )
+    response = client.get_secret_value(SecretId=(settings.api_keys_secret_name))
 
-    secret = json.loads(
-        response["SecretString"]
-    )
+    secret = json.loads(response["SecretString"])
 
     required_keys = (
         "OPENAI_API_KEY",
@@ -35,19 +27,12 @@ def load_api_keys():
     )
 
     for key in required_keys:
-        value = secret.get(
-            key
-        )
+        value = secret.get(key)
 
         if not value:
-            raise RuntimeError(
-                f"{key} was not found in "
-                f"{settings.api_keys_secret_name}."
-            )
+            raise RuntimeError(f"{key} was not found in {settings.api_keys_secret_name}.")
 
-        os.environ[key] = str(
-            value
-        )
+        os.environ[key] = str(value)
 
 
 def lambda_handler(
@@ -56,7 +41,10 @@ def lambda_handler(
 ):
     """AWS Lambda entry point for the morning portfolio brief."""
 
-    logger.info("Starting portfolio morning brief", extra={"request_id": getattr(context, "aws_request_id", None)})
+    logger.info(
+        "Starting portfolio morning brief",
+        extra={"request_id": getattr(context, "aws_request_id", None)},
+    )
     load_api_keys()
 
     # Import after secrets are loaded because the research clients

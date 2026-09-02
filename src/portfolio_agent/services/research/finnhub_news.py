@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 import requests
+
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
 
 
@@ -30,9 +31,7 @@ class FinnhubNewsClient:
         self.api_key = api_key or os.getenv("FINNHUB_API_KEY")
 
         if not self.api_key:
-            raise FinnhubError(
-                "FINNHUB_API_KEY was not found in the environment."
-            )
+            raise FinnhubError("FINNHUB_API_KEY was not found in the environment.")
 
         self.session = requests.Session()
 
@@ -62,26 +61,19 @@ class FinnhubNewsClient:
 
         if not response.ok:
             raise FinnhubError(
-                f"Finnhub request failed with status "
-                f"{response.status_code}: {response.text}"
+                f"Finnhub request failed with status {response.status_code}: {response.text}"
             )
 
         try:
             raw_articles = response.json()
         except ValueError as error:
-            raise FinnhubError(
-                "Finnhub returned an invalid JSON response."
-            ) from error
+            raise FinnhubError("Finnhub returned an invalid JSON response.") from error
 
         if not isinstance(raw_articles, list):
-            raise FinnhubError(
-                f"Unexpected Finnhub response: {raw_articles}"
-            )
+            raise FinnhubError(f"Unexpected Finnhub response: {raw_articles}")
 
         articles = [
-            self._normalize_article(article)
-            for article in raw_articles
-            if article.get("headline")
+            self._normalize_article(article) for article in raw_articles if article.get("headline")
         ]
 
         articles.sort(
@@ -119,19 +111,12 @@ class FinnhubNewsClient:
         )
 
         return NewsArticle(
-            headline=FinnhubNewsClient._clean_text(
-                article.get("headline", "")
-            ),
-            summary=FinnhubNewsClient._clean_text(
-                article.get("summary", "")
-            ),
-            source=FinnhubNewsClient._clean_text(
-                article.get("source", "")
-            ),
+            headline=FinnhubNewsClient._clean_text(article.get("headline", "")),
+            summary=FinnhubNewsClient._clean_text(article.get("summary", "")),
+            source=FinnhubNewsClient._clean_text(article.get("source", "")),
             url=article.get("url", "").strip(),
             published_at=published_at,
             related=article.get("related", "").strip(),
             category=article.get("category", "").strip(),
             image_url=article.get("image") or None,
         )
-

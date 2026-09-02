@@ -1,8 +1,7 @@
 from dataclasses import asdict
 from datetime import datetime, timezone
 
-from portfolio_agent.domain.portfolio import Portfolio, Account, Position
-
+from portfolio_agent.domain.portfolio import Account, Portfolio, Position
 
 SNAPSHOT_SCHEMA_VERSION = 1
 
@@ -41,12 +40,8 @@ def snapshot_to_portfolio(snapshot):
                     symbol=position_data["symbol"],
                     asset_type=position_data["asset_type"],
                     quantity=float(position_data["quantity"]),
-                    average_price=float(
-                        position_data["average_price"]
-                    ),
-                    market_value=float(
-                        position_data["market_value"]
-                    ),
+                    average_price=float(position_data["average_price"]),
+                    market_value=float(position_data["market_value"]),
                 )
 
                 positions.append(position)
@@ -54,9 +49,7 @@ def snapshot_to_portfolio(snapshot):
 
             account = Account(
                 account_type=account_data["account_type"],
-                total_value=float(
-                    account_data["total_value"]
-                ),
+                total_value=float(account_data["total_value"]),
                 cash=float(account_data["cash"]),
                 positions=positions,
             )
@@ -64,18 +57,14 @@ def snapshot_to_portfolio(snapshot):
             accounts.append(account)
 
         return Portfolio(
-            total_value=float(
-                portfolio_data["total_value"]
-            ),
+            total_value=float(portfolio_data["total_value"]),
             cash=float(portfolio_data["cash"]),
             accounts=accounts,
             positions=all_positions,
         )
 
     except (KeyError, TypeError, ValueError) as error:
-        raise ValueError(
-            f"Invalid portfolio snapshot: {error}"
-        ) from error
+        raise ValueError(f"Invalid portfolio snapshot: {error}") from error
 
 
 def verify_snapshot(
@@ -88,9 +77,6 @@ def verify_snapshot(
     """
 
     if original_portfolio != loaded_portfolio:
-        raise ValueError(
-            "Loaded portfolio does not match "
-            "the original portfolio."
-        )
+        raise ValueError("Loaded portfolio does not match the original portfolio.")
 
     return True

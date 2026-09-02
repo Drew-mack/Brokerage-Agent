@@ -1,24 +1,12 @@
+import logging
 import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-import logging
 
 from portfolio_agent.config import settings
-
 from portfolio_agent.domain.analytics import analyze_portfolio
-from portfolio_agent.services.brief.email_renderer import EmailRenderer
 from portfolio_agent.integrations.mailer.ses_sender import SESEmailSender
-from portfolio_agent.storage.delivery_storage import (
-    DeliveryAlreadyClaimed,
-    claim_delivery,
-    get_last_delivered_session,
-    record_delivery,
-)
-from portfolio_agent.storage.thesis_storage import (
-    ThesisStorageError,
-    get_latest_thesis,
-    save_thesis,
-)
+from portfolio_agent.services.brief.email_renderer import EmailRenderer
 from portfolio_agent.services.brief.morning_brief import MorningBriefBuilder
 from portfolio_agent.services.research.finnhub_news import (
     FinnhubError,
@@ -43,6 +31,17 @@ from portfolio_agent.services.research.research_analyzer import (
     MovementAnalysis,
     ResearchAnalyzer,
     ResearchAnalyzerError,
+)
+from portfolio_agent.storage.delivery_storage import (
+    DeliveryAlreadyClaimed,
+    claim_delivery,
+    get_last_delivered_session,
+    record_delivery,
+)
+from portfolio_agent.storage.thesis_storage import (
+    ThesisStorageError,
+    get_latest_thesis,
+    save_thesis,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,25 +97,13 @@ class ResearchService:
         forward_analyzer: ForwardAnalyzer | None = None,
         portfolio_advisor: PortfolioAdvisor | None = None,
     ):
-        self.news_client = (
-            news_client
-            or FinnhubNewsClient()
-        )
+        self.news_client = news_client or FinnhubNewsClient()
 
-        self.movement_analyzer = (
-            movement_analyzer
-            or ResearchAnalyzer()
-        )
+        self.movement_analyzer = movement_analyzer or ResearchAnalyzer()
 
-        self.forward_analyzer = (
-            forward_analyzer
-            or ForwardAnalyzer()
-        )
+        self.forward_analyzer = forward_analyzer or ForwardAnalyzer()
 
-        self.portfolio_advisor = (
-            portfolio_advisor
-            or PortfolioAdvisor()
-        )
+        self.portfolio_advisor = portfolio_advisor or PortfolioAdvisor()
 
     def research_portfolio_movements(
         self,
@@ -126,69 +113,40 @@ class ResearchService:
     ) -> list[PositionResearch]:
         """Research important movements from the latest market session."""
 
-        positions = (
-            self._select_movement_positions(
-                analytics.positions
-            )
-        )
+        positions = self._select_movement_positions(analytics.positions)
 
         if not positions:
             return []
 
-        move_start = (
-            self._timestamp_to_datetime(
-                previous_timestamp
-            )
-        )
+        move_start = self._timestamp_to_datetime(previous_timestamp)
 
-        move_end = (
-            self._timestamp_to_datetime(
-                latest_timestamp
-            )
-        )
+        move_end = self._timestamp_to_datetime(latest_timestamp)
 
-        start_date = (
-            analytics.previous_session_date
-        )
-        end_date = (
-            analytics.session_date
-        )
+        start_date = analytics.previous_session_date
+        end_date = analytics.session_date
 
         results = []
 
         for position in positions:
             try:
-                result = (
-                    self._research_movement_position(
-                        symbol=position.symbol,
-                        return_pct=(
-                            position.return_pct
-                        ),
-                        dollar_change=(
-                            position.dollar_change
-                        ),
-                        portfolio_contribution=(
-                            position.portfolio_contribution
-                        ),
-                        start_date=start_date,
-                        end_date=end_date,
-                        move_start=move_start,
-                        move_end=move_end,
-                    )
+                result = self._research_movement_position(
+                    symbol=position.symbol,
+                    return_pct=(position.return_pct),
+                    dollar_change=(position.dollar_change),
+                    portfolio_contribution=(position.portfolio_contribution),
+                    start_date=start_date,
+                    end_date=end_date,
+                    move_start=move_start,
+                    move_end=move_end,
                 )
 
-                results.append(
-                    result
-                )
+                results.append(result)
 
             except (
                 FinnhubError,
                 ResearchAnalyzerError,
             ) as error:
-                print(
-                    f"Movement research failed for "
-                    f"{position.symbol}: {error}"
-                )
+                print(f"Movement research failed for {position.symbol}: {error}")
 
         return results
 
@@ -200,59 +158,32 @@ class ResearchService:
     ) -> list[ForwardPositionResearch]:
         """Research outlooks and advise on important holdings."""
 
-        positions = (
-            self._select_forward_positions(
-                analytics.positions
-            )
-        )
+        positions = self._select_forward_positions(analytics.positions)
 
         if not positions:
             return []
 
-        movement_by_symbol = {
-            result.symbol.upper(): result
-            for result in (
-                movement_results or []
-            )
-        }
+        movement_by_symbol = {result.symbol.upper(): result for result in (movement_results or [])}
 
-        end_date = (
-            as_of_date
-            or date.today()
-        )
+        end_date = as_of_date or date.today()
 
-        start_date = (
-            end_date
-            - timedelta(
-                days=FORWARD_LOOKBACK_DAYS
-            )
-        )
+        start_date = end_date - timedelta(days=FORWARD_LOOKBACK_DAYS)
 
         results = []
 
         for position in positions:
             try:
-                movement_research = (
-                    movement_by_symbol.get(
-                        position.symbol.upper()
-                    )
+                movement_research = movement_by_symbol.get(position.symbol.upper())
+
+                result = self._research_forward_position(
+                    analytics=analytics,
+                    position=position,
+                    movement_research=(movement_research),
+                    start_date=start_date,
+                    end_date=end_date,
                 )
 
-                result = (
-                    self._research_forward_position(
-                        analytics=analytics,
-                        position=position,
-                        movement_research=(
-                            movement_research
-                        ),
-                        start_date=start_date,
-                        end_date=end_date,
-                    )
-                )
-
-                results.append(
-                    result
-                )
+                results.append(result)
 
             except (
                 FinnhubError,
@@ -260,10 +191,7 @@ class ResearchService:
                 PortfolioAdvisorError,
                 ThesisStorageError,
             ) as error:
-                print(
-                    f"Forward research failed for "
-                    f"{position.symbol}: {error}"
-                )
+                print(f"Forward research failed for {position.symbol}: {error}")
 
         return results
 
@@ -280,71 +208,44 @@ class ResearchService:
     ) -> PositionResearch:
         """Run movement research for one security."""
 
-        articles = (
-            self.news_client.get_company_news(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-            )
+        articles = self.news_client.get_company_news(
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         if not articles:
-            raise FinnhubError(
-                f"No Finnhub news was found "
-                f"for {symbol}."
-            )
+            raise FinnhubError(f"No Finnhub news was found for {symbol}.")
 
-        ranked_articles = (
-            rank_company_news(
-                articles=articles,
-                symbol=symbol,
-                move_start=move_start,
-                move_end=move_end,
-                limit=MAX_MOVEMENT_CANDIDATES,
-            )
+        ranked_articles = rank_company_news(
+            articles=articles,
+            symbol=symbol,
+            move_start=move_start,
+            move_end=move_end,
+            limit=MAX_MOVEMENT_CANDIDATES,
         )
 
         if not ranked_articles:
-            raise FinnhubError(
-                f"No movement research "
-                f"candidates remained for "
-                f"{symbol}."
-            )
+            raise FinnhubError(f"No movement research candidates remained for {symbol}.")
 
-        analysis = (
-            self.movement_analyzer
-            .analyze_movement(
-                symbol=symbol,
-                return_pct=(
-                    return_pct * 100
-                ),
-                articles=ranked_articles,
-            )
+        analysis = self.movement_analyzer.analyze_movement(
+            symbol=symbol,
+            return_pct=(return_pct * 100),
+            articles=ranked_articles,
         )
 
-        supporting_articles = (
-            self._resolve_articles(
-                ranked_articles=(
-                    ranked_articles
-                ),
-                article_ids=(
-                    analysis
-                    .supporting_article_ids
-                ),
-            )
+        supporting_articles = self._resolve_articles(
+            ranked_articles=(ranked_articles),
+            article_ids=(analysis.supporting_article_ids),
         )
 
         return PositionResearch(
             symbol=symbol,
             return_pct=return_pct,
             dollar_change=dollar_change,
-            portfolio_contribution=(
-                portfolio_contribution
-            ),
+            portfolio_contribution=(portfolio_contribution),
             analysis=analysis,
-            supporting_articles=(
-                supporting_articles
-            ),
+            supporting_articles=(supporting_articles),
         )
 
     def _research_forward_position(
@@ -359,116 +260,66 @@ class ResearchService:
 
         symbol = position.symbol
 
-        previous_thesis = (
-            get_latest_thesis(
-                symbol
-            )
-        )
+        previous_thesis = get_latest_thesis(symbol)
 
-        articles = (
-            self.news_client.get_company_news(
-                symbol=symbol,
-                start_date=start_date,
-                end_date=end_date,
-            )
+        articles = self.news_client.get_company_news(
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         if not articles:
-            raise FinnhubError(
-                f"No Finnhub news was found "
-                f"for {symbol}."
-            )
+            raise FinnhubError(f"No Finnhub news was found for {symbol}.")
 
-        ranked_articles = (
-            rank_forward_news(
-                articles=articles,
-                symbol=symbol,
-                limit=MAX_FORWARD_CANDIDATES,
-            )
+        ranked_articles = rank_forward_news(
+            articles=articles,
+            symbol=symbol,
+            limit=MAX_FORWARD_CANDIDATES,
         )
 
         if not ranked_articles:
-            raise FinnhubError(
-                f"No forward research "
-                f"candidates remained for "
-                f"{symbol}."
-            )
+            raise FinnhubError(f"No forward research candidates remained for {symbol}.")
 
-        analysis = (
-            self.forward_analyzer.analyze(
-                symbol=symbol,
-                articles=ranked_articles,
-                previous_thesis=(
-                    previous_thesis
-                ),
-            )
+        analysis = self.forward_analyzer.analyze(
+            symbol=symbol,
+            articles=ranked_articles,
+            previous_thesis=(previous_thesis),
         )
 
-        supporting_articles = (
-            self._resolve_articles(
-                ranked_articles=(
-                    ranked_articles
-                ),
-                article_ids=(
-                    analysis
-                    .supporting_article_ids
-                ),
-            )
+        supporting_articles = self._resolve_articles(
+            ranked_articles=(ranked_articles),
+            article_ids=(analysis.supporting_article_ids),
         )
 
-        if (
-            analysis.change_type
-            != "unchanged"
-        ):
+        if analysis.change_type != "unchanged":
             save_thesis(
                 symbol=symbol,
                 analysis=analysis,
-                supporting_articles=(
-                    supporting_articles
-                ),
+                supporting_articles=(supporting_articles),
             )
 
         movement_explanation = None
 
         if movement_research is not None:
-            movement_explanation = (
-                movement_research
-                .analysis
-                .explanation
-            )
+            movement_explanation = movement_research.analysis.explanation
 
-        advice = (
-            self.portfolio_advisor.advise(
-                symbol=symbol,
-                portfolio_value=(
-                    analytics.portfolio_value
-                ),
-                cash=analytics.cash,
-                positions=analytics.positions,
-                position=position,
-                thesis=analysis,
-                movement_explanation=(
-                    movement_explanation
-                ),
-            )
+        advice = self.portfolio_advisor.advise(
+            symbol=symbol,
+            portfolio_value=(analytics.portfolio_value),
+            cash=analytics.cash,
+            positions=analytics.positions,
+            position=position,
+            thesis=analysis,
+            movement_explanation=(movement_explanation),
         )
 
         return ForwardPositionResearch(
             symbol=symbol,
-            portfolio_weight=(
-                position.current_weight
-            ),
-            return_pct=(
-                position.return_pct
-            ),
-            portfolio_contribution=(
-                position
-                .portfolio_contribution
-            ),
+            portfolio_weight=(position.current_weight),
+            return_pct=(position.return_pct),
+            portfolio_contribution=(position.portfolio_contribution),
             analysis=analysis,
-            supporting_articles=(
-                supporting_articles
-            ),
+            supporting_articles=(supporting_articles),
             advice=advice,
         )
 
@@ -481,51 +332,27 @@ class ResearchService:
         qualifying_positions = []
 
         for position in positions:
-            if (
-                position.symbol.upper()
-                in EXCLUDED_SYMBOLS
-            ):
+            if position.symbol.upper() in EXCLUDED_SYMBOLS:
                 continue
 
-            meaningful_return = (
-                abs(
-                    position.return_pct
-                )
-                >= MIN_ABSOLUTE_RETURN
-            )
+            meaningful_return = abs(position.return_pct) >= MIN_ABSOLUTE_RETURN
 
             meaningful_contribution = (
-                abs(
-                    position
-                    .portfolio_contribution
-                )
-                >= MIN_PORTFOLIO_CONTRIBUTION
+                abs(position.portfolio_contribution) >= MIN_PORTFOLIO_CONTRIBUTION
             )
 
-            if (
-                meaningful_return
-                or meaningful_contribution
-            ):
-                qualifying_positions.append(
-                    position
-                )
+            if meaningful_return or meaningful_contribution:
+                qualifying_positions.append(position)
 
         qualifying_positions.sort(
             key=lambda position: (
-                abs(
-                    position
-                    .portfolio_contribution
-                ),
-                abs(
-                    position.return_pct
-                ),
+                abs(position.portfolio_contribution),
+                abs(position.return_pct),
             ),
             reverse=True,
         )
 
-        return qualifying_positions[
-            :MAX_MOVEMENT_POSITIONS
-        ]
+        return qualifying_positions[:MAX_MOVEMENT_POSITIONS]
 
     @staticmethod
     def _select_forward_positions(
@@ -536,32 +363,20 @@ class ResearchService:
         qualifying_positions = []
 
         for position in positions:
-            if (
-                position.symbol.upper()
-                in EXCLUDED_SYMBOLS
-            ):
+            if position.symbol.upper() in EXCLUDED_SYMBOLS:
                 continue
 
-            if (
-                position.current_weight
-                < MIN_FORWARD_PORTFOLIO_WEIGHT
-            ):
+            if position.current_weight < MIN_FORWARD_PORTFOLIO_WEIGHT:
                 continue
 
-            qualifying_positions.append(
-                position
-            )
+            qualifying_positions.append(position)
 
         qualifying_positions.sort(
-            key=lambda position: (
-                position.current_weight
-            ),
+            key=lambda position: (position.current_weight),
             reverse=True,
         )
 
-        return qualifying_positions[
-            :MAX_FORWARD_POSITIONS
-        ]
+        return qualifying_positions[:MAX_FORWARD_POSITIONS]
 
     @staticmethod
     def _resolve_articles(
@@ -573,22 +388,10 @@ class ResearchService:
         supporting_articles = []
 
         for article_id in article_ids:
-            index = (
-                article_id - 1
-            )
+            index = article_id - 1
 
-            if (
-                0
-                <= index
-                < len(
-                    ranked_articles
-                )
-            ):
-                supporting_articles.append(
-                    ranked_articles[
-                        index
-                    ].article
-                )
+            if 0 <= index < len(ranked_articles):
+                supporting_articles.append(ranked_articles[index].article)
 
         return supporting_articles
 
@@ -607,11 +410,7 @@ class ResearchService:
 def running_in_lambda():
     """Return whether execution is occurring inside AWS Lambda."""
 
-    return bool(
-        os.getenv(
-            "AWS_LAMBDA_FUNCTION_NAME"
-        )
-    )
+    return bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 
 
 def run_morning_brief(
@@ -622,9 +421,7 @@ def run_morning_brief(
     """Run the complete portfolio morning-brief pipeline."""
 
     if write_preview is None:
-        write_preview = (
-            not running_in_lambda()
-        )
+        write_preview = not running_in_lambda()
 
     logger.info("Generating portfolio analytics")
 
@@ -632,43 +429,25 @@ def run_morning_brief(
         analytics,
         previous_timestamp,
         latest_timestamp,
-    ) = analyze_portfolio(
-        benchmark_symbol=(
-            BENCHMARK_SYMBOL
-        )
-    )
+    ) = analyze_portfolio(benchmark_symbol=(BENCHMARK_SYMBOL))
 
     logger.info(
         "Portfolio analytics generated",
         extra={"session_date": str(analytics.session_date)},
     )
 
-    session_date = (
-        analytics.session_date.isoformat()
-    )
+    session_date = analytics.session_date.isoformat()
 
-    if (
-        send_email
-        and prevent_duplicate_delivery
-    ):
-        last_delivered_session = (
-            get_last_delivered_session()
-        )
+    if send_email and prevent_duplicate_delivery:
+        last_delivered_session = get_last_delivered_session()
 
-        if (
-            last_delivered_session
-            == session_date
-        ):
+        if last_delivered_session == session_date:
             logger.info("Morning Brief already delivered", extra={"session_date": session_date})
 
             return {
                 "session_date": session_date,
-                "portfolio_value": (
-                    analytics.portfolio_value
-                ),
-                "portfolio_return": (
-                    analytics.portfolio_return
-                ),
+                "portfolio_value": (analytics.portfolio_value),
+                "portfolio_return": (analytics.portfolio_return),
                 "message_id": None,
                 "delivery_skipped": True,
             }
@@ -688,16 +467,10 @@ def run_morning_brief(
 
     logger.info("Researching meaningful portfolio movements")
 
-    movement_results = (
-        service.research_portfolio_movements(
-            analytics=analytics,
-            previous_timestamp=(
-                previous_timestamp
-            ),
-            latest_timestamp=(
-                latest_timestamp
-            ),
-        )
+    movement_results = service.research_portfolio_movements(
+        analytics=analytics,
+        previous_timestamp=(previous_timestamp),
+        latest_timestamp=(latest_timestamp),
     )
 
     logger.info("Movement research completed", extra={"count": len(movement_results)})
@@ -708,38 +481,20 @@ def run_morning_brief(
     )
     logger.info("Forward research completed", extra={"count": len(forward_results)})
 
-    brief_builder = (
-        MorningBriefBuilder()
+    brief_builder = MorningBriefBuilder()
+
+    morning_brief = brief_builder.build(
+        analytics=analytics,
+        movement_results=(movement_results),
+        forward_results=(forward_results),
     )
 
-    morning_brief = (
-        brief_builder.build(
-            analytics=analytics,
-            movement_results=(
-                movement_results
-            ),
-            forward_results=(
-                forward_results
-            ),
-        )
-    )
+    email_renderer = EmailRenderer()
 
-    email_renderer = (
-        EmailRenderer()
-    )
-
-    email_html = (
-        email_renderer.render(
-            morning_brief
-        )
-    )
+    email_html = email_renderer.render(morning_brief)
 
     if write_preview:
-        email_path = (
-            email_renderer.write(
-                morning_brief
-            )
-        )
+        email_path = email_renderer.write(morning_brief)
 
         logger.info("HTML morning brief written", extra={"path": str(email_path)})
 
@@ -755,61 +510,35 @@ def run_morning_brief(
         if not running_in_lambda():
             aws_profile = settings.aws_profile
 
-        email_sender = (
-            SESEmailSender(
-                sender_email=(
-                    sender_email
-                ),
-                recipient_email=(
-                    recipient_email
-                ),
-                aws_region=(
-                    aws_region
-                ),
-                aws_profile=(
-                    aws_profile
-                ),
-            )
+        email_sender = SESEmailSender(
+            sender_email=(sender_email),
+            recipient_email=(recipient_email),
+            aws_region=(aws_region),
+            aws_profile=(aws_profile),
         )
 
         email_subject = (
-            "Morning Brief — "
-            f"{morning_brief.date.strftime('%b')} "
-            f"{morning_brief.date.day}"
+            f"Morning Brief — {morning_brief.date.strftime('%b')} {morning_brief.date.day}"
         )
 
-        message_id = (
-            email_sender.send(
-                subject=(
-                    email_subject
-                ),
-                html=email_html,
-            )
+        message_id = email_sender.send(
+            subject=(email_subject),
+            html=email_html,
         )
 
         logger.info("Morning Brief email sent", extra={"message_id": message_id})
 
         if prevent_duplicate_delivery:
             record_delivery(
-                session_date=(
-                    session_date
-                ),
-                message_id=(
-                    message_id
-                ),
+                session_date=(session_date),
+                message_id=(message_id),
             )
 
             logger.info("Delivery state recorded", extra={"session_date": session_date})
 
     return {
-        "session_date": (
-            analytics.session_date.isoformat()
-        ),
-        "portfolio_value": (
-            analytics.portfolio_value
-        ),
-        "portfolio_return": (
-            analytics.portfolio_return
-        ),
+        "session_date": (analytics.session_date.isoformat()),
+        "portfolio_value": (analytics.portfolio_value),
+        "portfolio_return": (analytics.portfolio_return),
         "message_id": message_id,
     }

@@ -50,9 +50,7 @@ class ForwardAnalyzer:
         api_key = api_key or os.getenv("OPENAI_API_KEY")
 
         if not api_key:
-            raise ForwardAnalyzerError(
-                "OPENAI_API_KEY was not found in the environment."
-            )
+            raise ForwardAnalyzerError("OPENAI_API_KEY was not found in the environment.")
 
         self.client = OpenAI(api_key=api_key)
 
@@ -70,9 +68,7 @@ class ForwardAnalyzer:
         """
 
         if not articles:
-            raise ForwardAnalyzerError(
-                "At least one news article is required."
-            )
+            raise ForwardAnalyzerError("At least one news article is required.")
 
         article_data = []
 
@@ -86,17 +82,13 @@ class ForwardAnalyzer:
                 {
                     "id": article_id,
                     "source": article.source,
-                    "published_at": (
-                        article.published_at.isoformat()
-                    ),
+                    "published_at": (article.published_at.isoformat()),
                     "headline": article.headline,
                     "summary": article.summary,
                 }
             )
 
-        previous_thesis_data = self._prepare_previous_thesis(
-            previous_thesis
-        )
+        previous_thesis_data = self._prepare_previous_thesis(previous_thesis)
 
         prompt = self._build_prompt(
             symbol=symbol,
@@ -235,29 +227,21 @@ class ForwardAnalyzer:
             )
 
         except Exception as error:
-            raise ForwardAnalyzerError(
-                f"OpenAI request failed: {error}"
-            ) from error
+            raise ForwardAnalyzerError(f"OpenAI request failed: {error}") from error
 
         try:
-            result = json.loads(
-                response.output_text
-            )
+            result = json.loads(response.output_text)
 
         except (
             TypeError,
             json.JSONDecodeError,
         ) as error:
-            raise ForwardAnalyzerError(
-                "OpenAI returned an invalid structured response."
-            ) from error
+            raise ForwardAnalyzerError("OpenAI returned an invalid structured response.") from error
 
         watch_items = [
             WatchItem(
                 topic=item["topic"],
-                supporting_article_ids=(
-                    item["supporting_article_ids"]
-                ),
+                supporting_article_ids=(item["supporting_article_ids"]),
             )
             for item in result["watch_items"]
         ]
@@ -266,12 +250,8 @@ class ForwardAnalyzer:
         output_tokens = response.usage.output_tokens
 
         estimated_cost = (
-            input_tokens
-            / 1_000_000
-            * INPUT_COST_PER_MILLION
-            + output_tokens
-            / 1_000_000
-            * OUTPUT_COST_PER_MILLION
+            input_tokens / 1_000_000 * INPUT_COST_PER_MILLION
+            + output_tokens / 1_000_000 * OUTPUT_COST_PER_MILLION
         )
 
         return ForwardAnalysis(
@@ -280,9 +260,7 @@ class ForwardAnalyzer:
             confidence=result["confidence"],
             summary=result["summary"],
             watch_items=watch_items,
-            supporting_article_ids=(
-                result["supporting_article_ids"]
-            ),
+            supporting_article_ids=(result["supporting_article_ids"]),
             change_type=result["change_type"],
             change_summary=result["change_summary"],
             input_tokens=input_tokens,
@@ -300,18 +278,10 @@ class ForwardAnalyzer:
             return None
 
         return {
-            "timestamp": previous_thesis.get(
-                "timestamp"
-            ),
-            "outlook": previous_thesis.get(
-                "outlook"
-            ),
-            "confidence": previous_thesis.get(
-                "confidence"
-            ),
-            "summary": previous_thesis.get(
-                "summary"
-            ),
+            "timestamp": previous_thesis.get("timestamp"),
+            "outlook": previous_thesis.get("outlook"),
+            "confidence": previous_thesis.get("confidence"),
+            "summary": previous_thesis.get("summary"),
             "watch_items": previous_thesis.get(
                 "watch_items",
                 [],
@@ -332,8 +302,7 @@ class ForwardAnalyzer:
 
         if previous_thesis is None:
             previous_context = (
-                "No previous thesis exists. This is the initial "
-                "analysis for this company."
+                "No previous thesis exists. This is the initial analysis for this company."
             )
         else:
             previous_context = json.dumps(

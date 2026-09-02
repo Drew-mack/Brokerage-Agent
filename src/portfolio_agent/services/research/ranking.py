@@ -4,6 +4,7 @@ from datetime import datetime
 
 from portfolio_agent.services.research.finnhub_news import NewsArticle
 
+
 @dataclass
 class RankedNewsArticle:
     article: NewsArticle
@@ -191,10 +192,7 @@ def _score_article(
     headline = article.headline.lower()
     summary = article.summary.lower()
 
-    if any(
-        pattern in headline
-        for pattern in LOW_VALUE_PATTERNS
-    ):
+    if any(pattern in headline for pattern in LOW_VALUE_PATTERNS):
         score -= 10
 
     if move_start <= article.published_at <= move_end:
@@ -211,16 +209,10 @@ def _score_article(
 
     company_terms = _company_terms(symbol)
 
-    if any(
-        term in headline
-        for term in company_terms
-    ):
+    if any(term in headline for term in company_terms):
         score += 4
 
-    if any(
-        term in summary
-        for term in company_terms
-    ):
+    if any(term in summary for term in company_terms):
         score += 2
 
     if article.source in PREFERRED_SOURCES:
@@ -245,10 +237,7 @@ def _score_forward_article(
 
     combined_text = f"{headline} {summary}"
 
-    if any(
-        pattern in headline
-        for pattern in LOW_VALUE_PATTERNS
-    ):
+    if any(pattern in headline for pattern in LOW_VALUE_PATTERNS):
         score -= 10
 
     related_symbols = {
@@ -262,25 +251,15 @@ def _score_forward_article(
 
     company_terms = _company_terms(symbol)
 
-    if any(
-        term in headline
-        for term in company_terms
-    ):
+    if any(term in headline for term in company_terms):
         score += 4
 
-    if any(
-        term in summary
-        for term in company_terms
-    ):
+    if any(term in summary for term in company_terms):
         score += 2
 
     # Keyword matches only identify articles likely to contain useful
     # evidence; their contribution is capped to avoid over-ranking noise.
-    matching_forward_terms = sum(
-        1
-        for term in FORWARD_LOOKING_TERMS
-        if term in combined_text
-    )
+    matching_forward_terms = sum(1 for term in FORWARD_LOOKING_TERMS if term in combined_text)
 
     score += min(
         matching_forward_terms * 1.5,

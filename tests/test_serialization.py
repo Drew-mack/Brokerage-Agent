@@ -18,4 +18,3 @@ def test_portfolio_snapshot_round_trip():
     )
 
     assert snapshot_to_portfolio(portfolio_to_snapshot(original)) == original
-

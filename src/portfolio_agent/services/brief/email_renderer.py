@@ -1,7 +1,6 @@
 from html import escape
 from pathlib import Path
 
-
 PAGE_BACKGROUND = "#f7f6f3"
 CONTENT_BACKGROUND = "#fffefc"
 TEXT_PRIMARY = "#37352f"
@@ -15,10 +14,7 @@ POSITIVE = "#448361"
 NEGATIVE = "#c4554d"
 NEUTRAL = "#787774"
 
-FONT_STACK = (
-    "-apple-system, BlinkMacSystemFont, "
-    "'Segoe UI', Helvetica, Arial, sans-serif"
-)
+FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 
 
 class EmailRenderer:
@@ -27,33 +23,20 @@ class EmailRenderer:
     def render(self, brief) -> str:
         """Render the complete morning brief."""
 
-        changes_html = self._render_changes(
-            brief.changes
-        )
+        changes_html = self._render_changes(brief.changes)
 
-        advice_html = self._render_advice(
-            brief.advice
-        )
+        advice_html = self._render_advice(brief.advice)
 
         if not changes_html and not advice_html:
-            body_sections = (
-                self._render_quiet_morning()
-            )
+            body_sections = self._render_quiet_morning()
         else:
-            body_sections = (
-                changes_html
-                + advice_html
-            )
+            body_sections = changes_html + advice_html
 
-        brief_date = self._format_date(
-            brief.date
-        )
+        brief_date = self._format_date(brief.date)
 
-        session_description = (
-            self._format_session_description(
-                brief_date=brief.date,
-                session_date=brief.session_date,
-            )
+        session_description = self._format_session_description(
+            brief_date=brief.date,
+            session_date=brief.session_date,
         )
 
         return f"""<!doctype html>
@@ -212,38 +195,31 @@ class EmailRenderer:
                 >
 
                   {
-                      self._metric_row(
-                          "Session",
-                          self._money_percent(
-                              brief.dollar_change,
-                              brief.portfolio_return,
-                          ),
-                          brief.portfolio_return,
-                      )
-                  }
+            self._metric_row(
+                "Session",
+                self._money_percent(
+                    brief.dollar_change,
+                    brief.portfolio_return,
+                ),
+                brief.portfolio_return,
+            )
+        }
 
                   {
-                      self._metric_row(
-                          brief.benchmark_symbol,
-                          (
-                              f"{brief.benchmark_return:+.2%}"
-                          ),
-                          brief.benchmark_return,
-                      )
-                  }
+            self._metric_row(
+                brief.benchmark_symbol,
+                (f"{brief.benchmark_return:+.2%}"),
+                brief.benchmark_return,
+            )
+        }
 
                   {
-                      self._metric_row(
-                          (
-                              f"vs. "
-                              f"{brief.benchmark_symbol}"
-                          ),
-                          (
-                              f"{brief.relative_return:+.2%}"
-                          ),
-                          brief.relative_return,
-                      )
-                  }
+            self._metric_row(
+                (f"vs. {brief.benchmark_symbol}"),
+                (f"{brief.relative_return:+.2%}"),
+                brief.relative_return,
+            )
+        }
 
                 </table>
 
@@ -295,9 +271,7 @@ class EmailRenderer:
     def write(
         self,
         brief,
-        output_path: str | Path = (
-            "output/morning_brief.html"
-        ),
+        output_path: str | Path = ("output/morning_brief.html"),
     ) -> Path:
         """Write the rendered email to disk."""
 
@@ -327,11 +301,7 @@ class EmailRenderer:
         cards = []
 
         for change in changes:
-            cards.append(
-                self._render_change_card(
-                    change
-                )
-            )
+            cards.append(self._render_change_card(change))
 
         return f"""
           <tr>
@@ -351,7 +321,7 @@ class EmailRenderer:
                   margin-top:20px;
                 "
               >
-                {''.join(cards)}
+                {"".join(cards)}
               </div>
 
             </td>
@@ -364,11 +334,7 @@ class EmailRenderer:
     ) -> str:
         """Render one completed-session movement."""
 
-        direction = (
-            self._direction_color(
-                change.return_pct
-            )
-        )
+        direction = self._direction_color(change.return_pct)
 
         return f"""
           <div
@@ -431,11 +397,7 @@ class EmailRenderer:
                   color:{direction};
                 "
               >
-                {
-                    self._format_money(
-                        change.dollar_impact
-                    )
-                }
+                {self._format_money(change.dollar_impact)}
               </span>
             </div>
 
@@ -447,11 +409,7 @@ class EmailRenderer:
                 color:{TEXT_PRIMARY};
               "
             >
-              {
-                  escape(
-                      change.explanation
-                  )
-              }
+              {escape(change.explanation)}
             </div>
 
             <div
@@ -462,11 +420,7 @@ class EmailRenderer:
                 color:{TEXT_SECONDARY};
               "
             >
-              {
-                  escape(
-                      change.thesis_implication
-                  )
-              }
+              {escape(change.thesis_implication)}
             </div>
 
           </div>
@@ -483,15 +437,11 @@ class EmailRenderer:
 
         items = []
 
-        for index, item in enumerate(
-            advice_items
-        ):
+        for index, item in enumerate(advice_items):
             items.append(
                 self._render_advice_item(
                     item=item,
-                    include_divider=(
-                        index > 0
-                    ),
+                    include_divider=(index > 0),
                 )
             )
 
@@ -513,7 +463,7 @@ class EmailRenderer:
                   margin-top:18px;
                 "
               >
-                {''.join(items)}
+                {"".join(items)}
               </div>
 
             </td>
@@ -530,21 +480,11 @@ class EmailRenderer:
         divider = ""
 
         if include_divider:
-            divider = (
-                f"border-top:"
-                f"1px solid {BORDER};"
-            )
+            divider = f"border-top:1px solid {BORDER};"
 
-        watches = "".join(
-            self._watch_pill(
-                watch
-            )
-            for watch in item.watch_items
-        )
+        watches = "".join(self._watch_pill(watch) for watch in item.watch_items)
 
-        outlook = self._format_outlook(
-            item.outlook
-        )
+        outlook = self._format_outlook(item.outlook)
 
         return f"""
           <div
@@ -593,11 +533,7 @@ class EmailRenderer:
               {escape(item.advice)}
             </div>
 
-            {
-                self._watching_html(
-                    watches
-                )
-            }
+            {self._watching_html(watches)}
 
           </div>
         """
@@ -630,17 +566,17 @@ class EmailRenderer:
 
         return (
             f'<span style="'
-            f'display:inline-block;'
-            f'margin:6px 6px 0 0;'
-            f'padding:5px 9px;'
-            f'background:{SOFT_BACKGROUND_HOVER};'
-            f'border-radius:5px;'
-            f'font-size:11px;'
-            f'line-height:1.4;'
-            f'color:{TEXT_SECONDARY};'
+            f"display:inline-block;"
+            f"margin:6px 6px 0 0;"
+            f"padding:5px 9px;"
+            f"background:{SOFT_BACKGROUND_HOVER};"
+            f"border-radius:5px;"
+            f"font-size:11px;"
+            f"line-height:1.4;"
+            f"color:{TEXT_SECONDARY};"
             f'">'
-            f'{escape(watch)}'
-            f'</span>'
+            f"{escape(watch)}"
+            f"</span>"
         )
 
     @staticmethod
@@ -688,11 +624,7 @@ class EmailRenderer:
               "
             >
 
-              {
-                  EmailRenderer._section_title(
-                      "Quiet Morning"
-                  )
-              }
+              {EmailRenderer._section_title("Quiet Morning")}
 
               <div
                 style="
@@ -721,11 +653,7 @@ class EmailRenderer:
     ) -> str:
         """Render one portfolio summary metric."""
 
-        color = (
-            EmailRenderer._direction_color(
-                direction
-            )
-        )
+        color = EmailRenderer._direction_color(direction)
 
         return f"""
           <tr>
@@ -763,10 +691,7 @@ class EmailRenderer:
     ) -> str:
         """Format a date without a leading zero."""
 
-        return (
-            f"{value.strftime('%A, %B')} "
-            f"{value.day}"
-        )
+        return f"{value.strftime('%A, %B')} {value.day}"
 
     @staticmethod
     def _format_session_description(
@@ -775,22 +700,12 @@ class EmailRenderer:
     ) -> str:
         """Describe the completed session naturally."""
 
-        day_difference = (
-            brief_date
-            - session_date
-        ).days
+        day_difference = (brief_date - session_date).days
 
         if day_difference == 1:
-            return (
-                f"{session_date.strftime('%A')}'s "
-                f"completed session"
-            )
+            return f"{session_date.strftime('%A')}'s completed session"
 
-        return (
-            "Completed session · "
-            f"{session_date.strftime('%A, %B')} "
-            f"{session_date.day}"
-        )
+        return f"Completed session · {session_date.strftime('%A, %B')} {session_date.day}"
 
     @staticmethod
     def _format_outlook(
@@ -807,10 +722,7 @@ class EmailRenderer:
     ) -> str:
         """Format dollar and percentage movement."""
 
-        return (
-            f"{EmailRenderer._format_money(dollars)} "
-            f"({return_pct:+.2%})"
-        )
+        return f"{EmailRenderer._format_money(dollars)} ({return_pct:+.2%})"
 
     @staticmethod
     def _format_money(
@@ -825,10 +737,7 @@ class EmailRenderer:
         else:
             sign = ""
 
-        return (
-            f"{sign}"
-            f"${abs(value):,.2f}"
-        )
+        return f"{sign}${abs(value):,.2f}"
 
     @staticmethod
     def _direction_color(

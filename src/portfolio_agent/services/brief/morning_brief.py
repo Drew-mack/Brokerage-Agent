@@ -8,7 +8,6 @@ from openai import OpenAI
 
 from portfolio_agent.config import settings
 
-
 load_dotenv()
 
 MODEL = settings.openai_model
@@ -38,9 +37,7 @@ class BriefAdvice:
     portfolio_weight: float
     outlook: str
     advice: str
-    watch_items: list[str] = field(
-        default_factory=list
-    )
+    watch_items: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -74,20 +71,12 @@ class MorningBriefBuilder:
         self,
         api_key: str | None = None,
     ):
-        api_key = (
-            api_key
-            or os.getenv("OPENAI_API_KEY")
-        )
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
 
         if not api_key:
-            raise MorningBriefError(
-                "OPENAI_API_KEY was not found "
-                "in the environment."
-            )
+            raise MorningBriefError("OPENAI_API_KEY was not found in the environment.")
 
-        self.client = OpenAI(
-            api_key=api_key
-        )
+        self.client = OpenAI(api_key=api_key)
 
     def build(
         self,
@@ -98,10 +87,7 @@ class MorningBriefBuilder:
     ) -> MorningBrief:
         """Build the final editorial content for the morning email."""
 
-        brief_date = (
-            brief_date
-            or date.today()
-        )
+        brief_date = brief_date or date.today()
 
         context = self._build_context(
             analytics=analytics,
@@ -112,23 +98,18 @@ class MorningBriefBuilder:
         try:
             response = self.client.responses.create(
                 model=MODEL,
-                reasoning={
-                    "effort": "low"
-                },
+                reasoning={"effort": "low"},
                 instructions=(
                     "You are the editor of a personal morning "
                     "portfolio brief. The research and investment "
                     "reasoning have already been completed. Your "
                     "job is to turn the supplied verified information "
                     "into a polished 60-90 second morning read. "
-
                     "Do not perform new research. Do not invent facts, "
                     "events, catalysts, forecasts, prices, or investment "
                     "conclusions. Use only the supplied information. "
-
                     "The brief has two main editorial sections: "
                     "Changes and Agentic Advice. "
-
                     "CHANGES explains meaningful developments from "
                     "the latest market session. For each included "
                     "security, explain what happened and the most "
@@ -136,54 +117,45 @@ class MorningBriefBuilder:
                     "2-3 concise sentences. Then write one additional "
                     "short sentence explaining what the development "
                     "means for the longer-term thesis. "
-
                     "Do not repeat the security's daily percentage "
                     "return or dollar portfolio impact in the prose. "
                     "Those values are displayed separately. "
-
                     "The thesis implication should be useful rather "
                     "than mechanical. For example, explain whether "
                     "the development materially changes, reinforces, "
                     "weakens, or simply leaves the longer-term thesis "
                     "intact. Do not expose internal change-type labels. "
-
                     "AGENTIC ADVICE tells the investor what to do or "
                     "consider doing with positions that genuinely "
                     "deserve attention. Preserve the substance of the "
                     "supplied portfolio advice while improving clarity "
                     "and removing repetition. Aim for roughly 3-5 "
                     "sentences per included position. "
-
                     "The advice should explain the recommended posture, "
                     "why that posture makes sense, and the most "
                     "important condition that could change it. Consider "
                     "portfolio concentration and position size when "
                     "they are relevant. "
-
                     "Do not merely restate the Changes section inside "
                     "Agentic Advice. Changes answers what happened. "
                     "Agentic Advice answers what the investor should "
                     "do about the position going forward. "
-
                     "Not every researched position must appear in "
                     "Agentic Advice. Include a position when its size, "
                     "recent movement, thesis development, risk, or "
                     "opportunity gives the investor a meaningful reason "
                     "to think about it today. "
-
                     "The supplied outlook label may be shown because "
                     "it gives useful context. Do not expose internal "
                     "confidence scores, change classifications, article "
                     "IDs, ranking scores, token usage, or model "
                     "reasoning. "
-
                     "For watch items, turn detailed research topics "
                     "into short, readable labels. Each label should "
                     "normally be two to five words. Examples include "
                     "'FY28 growth', 'AI demand', 'Margins & cash flow', "
                     "'Cloud growth', and 'Search competition'. Return "
                     "no more than three watch items per position. "
-
                     "The tone should resemble a high-quality personal "
                     "investment analyst briefing: concise, analytical, "
                     "plain-English, and useful. It should contain enough "
@@ -209,15 +181,9 @@ class MorningBriefBuilder:
                                     "items": {
                                         "type": "object",
                                         "properties": {
-                                            "symbol": {
-                                                "type": "string"
-                                            },
-                                            "explanation": {
-                                                "type": "string"
-                                            },
-                                            "thesis_implication": {
-                                                "type": "string"
-                                            },
+                                            "symbol": {"type": "string"},
+                                            "explanation": {"type": "string"},
+                                            "thesis_implication": {"type": "string"},
                                         },
                                         "required": [
                                             "symbol",
@@ -232,17 +198,11 @@ class MorningBriefBuilder:
                                     "items": {
                                         "type": "object",
                                         "properties": {
-                                            "symbol": {
-                                                "type": "string"
-                                            },
-                                            "advice": {
-                                                "type": "string"
-                                            },
+                                            "symbol": {"type": "string"},
+                                            "advice": {"type": "string"},
                                             "watch_items": {
                                                 "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                },
+                                                "items": {"type": "string"},
                                                 "maxItems": 3,
                                             },
                                         },
@@ -266,39 +226,24 @@ class MorningBriefBuilder:
             )
 
         except Exception as error:
-            raise MorningBriefError(
-                f"Morning brief generation failed: {error}"
-            ) from error
+            raise MorningBriefError(f"Morning brief generation failed: {error}") from error
 
         try:
-            editorial = json.loads(
-                response.output_text
-            )
+            editorial = json.loads(response.output_text)
 
         except (
             TypeError,
             json.JSONDecodeError,
         ) as error:
-            raise MorningBriefError(
-                "OpenAI returned an invalid "
-                "morning brief response."
-            ) from error
+            raise MorningBriefError("OpenAI returned an invalid morning brief response.") from error
 
-        input_tokens = (
-            response.usage.input_tokens
-        )
+        input_tokens = response.usage.input_tokens
 
-        output_tokens = (
-            response.usage.output_tokens
-        )
+        output_tokens = response.usage.output_tokens
 
         estimated_cost = (
-            input_tokens
-            / 1_000_000
-            * INPUT_COST_PER_MILLION
-            + output_tokens
-            / 1_000_000
-            * OUTPUT_COST_PER_MILLION
+            input_tokens / 1_000_000 * INPUT_COST_PER_MILLION
+            + output_tokens / 1_000_000 * OUTPUT_COST_PER_MILLION
         )
 
         changes = self._build_changes(
@@ -313,30 +258,14 @@ class MorningBriefBuilder:
 
         return MorningBrief(
             date=brief_date,
-            previous_session_date=(
-                analytics.previous_session_date
-            ),
-            session_date=(
-                analytics.session_date
-            ),
-            portfolio_value=(
-                analytics.portfolio_value
-            ),
-            dollar_change=(
-                analytics.dollar_change
-            ),
-            portfolio_return=(
-                analytics.portfolio_return
-            ),
-            benchmark_symbol=(
-                analytics.benchmark_symbol
-            ),
-            benchmark_return=(
-                analytics.benchmark_return
-            ),
-            relative_return=(
-                analytics.relative_return
-            ),
+            previous_session_date=(analytics.previous_session_date),
+            session_date=(analytics.session_date),
+            portfolio_value=(analytics.portfolio_value),
+            dollar_change=(analytics.dollar_change),
+            portfolio_return=(analytics.portfolio_return),
+            benchmark_symbol=(analytics.benchmark_symbol),
+            benchmark_return=(analytics.benchmark_return),
+            relative_return=(analytics.relative_return),
             cash=analytics.cash,
             changes=changes,
             advice=advice,
@@ -358,9 +287,7 @@ class MorningBriefBuilder:
         for result in movement_results:
             movements.append(
                 {
-                    "symbol": (
-                        result.symbol.upper()
-                    ),
+                    "symbol": (result.symbol.upper()),
                     "daily_return_pct": round(
                         result.return_pct * 100,
                         2,
@@ -373,12 +300,8 @@ class MorningBriefBuilder:
                         result.portfolio_contribution * 100,
                         2,
                     ),
-                    "movement_explanation": (
-                        result.analysis.explanation
-                    ),
-                    "movement_confidence": (
-                        result.analysis.confidence
-                    ),
+                    "movement_explanation": (result.analysis.explanation),
+                    "movement_confidence": (result.analysis.confidence),
                 }
             )
 
@@ -387,9 +310,7 @@ class MorningBriefBuilder:
         for result in forward_results:
             forward.append(
                 {
-                    "symbol": (
-                        result.symbol.upper()
-                    ),
+                    "symbol": (result.symbol.upper()),
                     "portfolio_weight_pct": round(
                         result.portfolio_weight * 100,
                         2,
@@ -402,40 +323,20 @@ class MorningBriefBuilder:
                         result.portfolio_contribution * 100,
                         2,
                     ),
-                    "outlook": (
-                        result.analysis.outlook
-                    ),
-                    "confidence": (
-                        result.analysis.confidence
-                    ),
-                    "thesis_summary": (
-                        result.analysis.summary
-                    ),
-                    "change_type": (
-                        result.analysis.change_type
-                    ),
-                    "change_summary": (
-                        result.analysis.change_summary
-                    ),
-                    "portfolio_advice": (
-                        result.advice.advice
-                    ),
-                    "watch_items": [
-                        item.topic
-                        for item
-                        in result.analysis.watch_items
-                    ],
+                    "outlook": (result.analysis.outlook),
+                    "confidence": (result.analysis.confidence),
+                    "thesis_summary": (result.analysis.summary),
+                    "change_type": (result.analysis.change_type),
+                    "change_summary": (result.analysis.change_summary),
+                    "portfolio_advice": (result.advice.advice),
+                    "watch_items": [item.topic for item in result.analysis.watch_items],
                 }
             )
 
         return {
             "portfolio": {
-                "previous_session_date": (
-                    analytics.previous_session_date.isoformat()
-                ),
-                "session_date": (
-                    analytics.session_date.isoformat()
-                ),
+                "previous_session_date": (analytics.previous_session_date.isoformat()),
+                "session_date": (analytics.session_date.isoformat()),
                 "portfolio_value": round(
                     analytics.portfolio_value,
                     2,
@@ -448,9 +349,7 @@ class MorningBriefBuilder:
                     analytics.portfolio_return * 100,
                     2,
                 ),
-                "benchmark_symbol": (
-                    analytics.benchmark_symbol
-                ),
+                "benchmark_symbol": (analytics.benchmark_symbol),
                 "benchmark_return_pct": round(
                     analytics.benchmark_return * 100,
                     2,
@@ -475,23 +374,14 @@ class MorningBriefBuilder:
     ) -> list[BriefChange]:
         """Combine editorial copy with deterministic movement facts."""
 
-        movement_by_symbol = {
-            result.symbol.upper(): result
-            for result in movement_results
-        }
+        movement_by_symbol = {result.symbol.upper(): result for result in movement_results}
 
         changes = []
 
         for item in editorial["changes"]:
-            symbol = (
-                item["symbol"].upper()
-            )
+            symbol = item["symbol"].upper()
 
-            result = (
-                movement_by_symbol.get(
-                    symbol
-                )
-            )
+            result = movement_by_symbol.get(symbol)
 
             if result is None:
                 continue
@@ -499,18 +389,10 @@ class MorningBriefBuilder:
             changes.append(
                 BriefChange(
                     symbol=symbol,
-                    return_pct=(
-                        result.return_pct
-                    ),
-                    dollar_impact=(
-                        result.dollar_change
-                    ),
-                    explanation=(
-                        item["explanation"]
-                    ),
-                    thesis_implication=(
-                        item["thesis_implication"]
-                    ),
+                    return_pct=(result.return_pct),
+                    dollar_impact=(result.dollar_change),
+                    explanation=(item["explanation"]),
+                    thesis_implication=(item["thesis_implication"]),
                 )
             )
 
@@ -523,23 +405,14 @@ class MorningBriefBuilder:
     ) -> list[BriefAdvice]:
         """Combine editorial advice with deterministic portfolio facts."""
 
-        forward_by_symbol = {
-            result.symbol.upper(): result
-            for result in forward_results
-        }
+        forward_by_symbol = {result.symbol.upper(): result for result in forward_results}
 
         advice_results = []
 
         for item in editorial["advice"]:
-            symbol = (
-                item["symbol"].upper()
-            )
+            symbol = item["symbol"].upper()
 
-            result = (
-                forward_by_symbol.get(
-                    symbol
-                )
-            )
+            result = forward_by_symbol.get(symbol)
 
             if result is None:
                 continue
@@ -547,21 +420,11 @@ class MorningBriefBuilder:
             advice_results.append(
                 BriefAdvice(
                     symbol=symbol,
-                    portfolio_weight=(
-                        result.portfolio_weight
-                    ),
-                    outlook=(
-                        result.analysis.outlook
-                    ),
-                    advice=(
-                        item["advice"]
-                    ),
-                    watch_items=(
-                        item["watch_items"]
-                    ),
+                    portfolio_weight=(result.portfolio_weight),
+                    outlook=(result.analysis.outlook),
+                    advice=(item["advice"]),
+                    watch_items=(item["watch_items"]),
                 )
             )
 
         return advice_results
-
-

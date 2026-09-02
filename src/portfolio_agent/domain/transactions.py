@@ -1,8 +1,6 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 
 from portfolio_agent.integrations.schwab import SchwabClient, iso_utc
-
 
 # =========================================================
 # Transaction Categories
@@ -19,6 +17,7 @@ OTHER = "OTHER"
 # =========================================================
 # Data Models
 # =========================================================
+
 
 @dataclass
 class Transaction:
@@ -39,25 +38,15 @@ class TransactionSummary:
     start_time: str
     end_time: str
 
-    transactions: list[Transaction] = field(
-        default_factory=list
-    )
+    transactions: list[Transaction] = field(default_factory=list)
 
-    trades: list[Transaction] = field(
-        default_factory=list
-    )
+    trades: list[Transaction] = field(default_factory=list)
 
-    transfers: list[Transaction] = field(
-        default_factory=list
-    )
+    transfers: list[Transaction] = field(default_factory=list)
 
-    income: list[Transaction] = field(
-        default_factory=list
-    )
+    income: list[Transaction] = field(default_factory=list)
 
-    other: list[Transaction] = field(
-        default_factory=list
-    )
+    other: list[Transaction] = field(default_factory=list)
 
     deposits: float = 0.0
     withdrawals: float = 0.0
@@ -72,6 +61,7 @@ class TransactionSummary:
 # Classification
 # =========================================================
 
+
 def classify_transaction(raw_transaction):
     """
     Translate Schwab's transaction types into the small set
@@ -81,15 +71,9 @@ def classify_transaction(raw_transaction):
     cannot confidently classify becomes OTHER.
     """
 
-    schwab_type = raw_transaction.get(
-        "type",
-        ""
-    )
+    schwab_type = raw_transaction.get("type", "")
 
-    description = raw_transaction.get(
-        "description",
-        ""
-    )
+    description = raw_transaction.get("description", "")
 
     description_lower = description.lower()
 
@@ -100,10 +84,7 @@ def classify_transaction(raw_transaction):
     # Schwab may report transferred securities as TRADE.
     # We observed this with "System transfer" transactions.
 
-    if (
-        schwab_type == "RECEIVE_AND_DELIVER"
-        or "system transfer" in description_lower
-    ):
+    if schwab_type == "RECEIVE_AND_DELIVER" or "system transfer" in description_lower:
         return TRANSFER
 
     # -----------------------------------------------------
@@ -153,20 +134,16 @@ def classify_transaction(raw_transaction):
 # Normalization
 # =========================================================
 
+
 def normalize_transaction(raw_transaction):
     """
     Convert one raw Schwab transaction into our application's
     Transaction model.
     """
 
-    category = classify_transaction(
-        raw_transaction
-    )
+    category = classify_transaction(raw_transaction)
 
-    transfer_items = raw_transaction.get(
-        "transferItems",
-        []
-    )
+    transfer_items = raw_transaction.get("transferItems", [])
 
     symbol = None
     quantity = None
@@ -175,43 +152,22 @@ def normalize_transaction(raw_transaction):
     # Most of the transactions we care about will contain
     # one transfer item. We use the first item for V1.
     if transfer_items:
-
         item = transfer_items[0]
 
-        instrument = item.get(
-            "instrument",
-            {}
-        )
+        instrument = item.get("instrument", {})
 
-        symbol = instrument.get(
-            "symbol"
-        )
+        symbol = instrument.get("symbol")
 
-        quantity = item.get(
-            "amount"
-        )
+        quantity = item.get("amount")
 
-        price = item.get(
-            "price"
-        )
+        price = item.get("price")
 
     return Transaction(
-        activity_id=raw_transaction.get(
-            "activityId"
-        ),
-        time=raw_transaction.get(
-            "time",
-            ""
-        ),
+        activity_id=raw_transaction.get("activityId"),
+        time=raw_transaction.get("time", ""),
         category=category,
-        schwab_type=raw_transaction.get(
-            "type",
-            ""
-        ),
-        description=raw_transaction.get(
-            "description",
-            ""
-        ),
+        schwab_type=raw_transaction.get("type", ""),
+        description=raw_transaction.get("description", ""),
         net_amount=float(
             raw_transaction.get(
                 "netAmount",
@@ -220,22 +176,15 @@ def normalize_transaction(raw_transaction):
             or 0.0
         ),
         symbol=symbol,
-        quantity=(
-            float(quantity)
-            if quantity is not None
-            else None
-        ),
-        price=(
-            float(price)
-            if price is not None
-            else None
-        ),
+        quantity=(float(quantity) if quantity is not None else None),
+        price=(float(price) if price is not None else None),
     )
 
 
 # =========================================================
 # Summary
 # =========================================================
+
 
 def build_transaction_summary(
     raw_transactions,
@@ -253,78 +202,53 @@ def build_transaction_summary(
     )
 
     for raw_transaction in raw_transactions:
+        transaction = normalize_transaction(raw_transaction)
 
-        transaction = normalize_transaction(
-            raw_transaction
-        )
-
-        summary.transactions.append(
-            transaction
-        )
+        summary.transactions.append(transaction)
 
         # -------------------------------------------------
         # Trade
         # -------------------------------------------------
 
         if transaction.category == TRADE:
-
-            summary.trades.append(
-                transaction
-            )
+            summary.trades.append(transaction)
 
         # -------------------------------------------------
         # Transfer
         # -------------------------------------------------
 
         elif transaction.category == TRANSFER:
-
-            summary.transfers.append(
-                transaction
-            )
+            summary.transfers.append(transaction)
 
         # -------------------------------------------------
         # Deposit
         # -------------------------------------------------
 
         elif transaction.category == DEPOSIT:
-
-            summary.deposits += abs(
-                transaction.net_amount
-            )
+            summary.deposits += abs(transaction.net_amount)
 
         # -------------------------------------------------
         # Withdrawal
         # -------------------------------------------------
 
         elif transaction.category == WITHDRAWAL:
-
-            summary.withdrawals += abs(
-                transaction.net_amount
-            )
+            summary.withdrawals += abs(transaction.net_amount)
 
         # -------------------------------------------------
         # Dividend / Interest
         # -------------------------------------------------
 
         elif transaction.category == INCOME:
+            summary.income.append(transaction)
 
-            summary.income.append(
-                transaction
-            )
-
-            summary.dividends_and_interest += (
-                transaction.net_amount
-            )
+            summary.dividends_and_interest += transaction.net_amount
 
         # -------------------------------------------------
         # Other
         # -------------------------------------------------
 
         else:
-
-            summary.other.append(
-                transaction
-            )
+            summary.other.append(transaction)
 
     return summary
 
@@ -332,6 +256,7 @@ def build_transaction_summary(
 # =========================================================
 # Schwab Retrieval
 # =========================================================
+
 
 def load_transactions(
     start_datetime,
@@ -344,38 +269,25 @@ def load_transactions(
 
     client = SchwabClient()
 
-    account_mappings = (
-        client.get_account_numbers()
-    )
+    account_mappings = client.get_account_numbers()
 
     raw_transactions = []
 
-    start_time = iso_utc(
-        start_datetime
-    )
+    start_time = iso_utc(start_datetime)
 
-    end_time = iso_utc(
-        end_datetime
-    )
+    end_time = iso_utc(end_datetime)
 
     for account_mapping in account_mappings:
+        account_hash = account_mapping["hashValue"]
 
-        account_hash = account_mapping[
-            "hashValue"
-        ]
-
-        account_transactions = (
-            client.get_transactions(
-                account_hash=account_hash,
-                start_date=start_time,
-                end_date=end_time,
-            )
+        account_transactions = client.get_transactions(
+            account_hash=account_hash,
+            start_date=start_time,
+            end_date=end_time,
         )
 
         if account_transactions:
-            raw_transactions.extend(
-                account_transactions
-            )
+            raw_transactions.extend(account_transactions)
 
     return build_transaction_summary(
         raw_transactions=raw_transactions,
@@ -387,4 +299,3 @@ def load_transactions(
 # =========================================================
 # Display
 # =========================================================
-

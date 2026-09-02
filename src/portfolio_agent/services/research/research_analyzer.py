@@ -38,9 +38,7 @@ class ResearchAnalyzer:
         api_key = api_key or os.getenv("OPENAI_API_KEY")
 
         if not api_key:
-            raise ResearchAnalyzerError(
-                "OPENAI_API_KEY was not found in the environment."
-            )
+            raise ResearchAnalyzerError("OPENAI_API_KEY was not found in the environment.")
 
         self.client = OpenAI(api_key=api_key)
 
@@ -58,9 +56,7 @@ class ResearchAnalyzer:
         """
 
         if not articles:
-            raise ResearchAnalyzerError(
-                "At least one news article is required."
-            )
+            raise ResearchAnalyzerError("At least one news article is required.")
 
         article_data = []
 
@@ -144,9 +140,7 @@ class ResearchAnalyzer:
                 },
             )
         except Exception as error:
-            raise ResearchAnalyzerError(
-                f"OpenAI request failed: {error}"
-            ) from error
+            raise ResearchAnalyzerError(f"OpenAI request failed: {error}") from error
 
         try:
             result = json.loads(response.output_text)

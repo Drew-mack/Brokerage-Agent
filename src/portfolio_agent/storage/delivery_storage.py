@@ -7,7 +7,6 @@ from botocore.exceptions import ClientError
 
 from portfolio_agent.config import settings
 
-
 MORNING_BRIEF_DELIVERY_ID = "morning-brief"
 
 
@@ -24,11 +23,7 @@ class DeliveryAlreadyClaimed(DeliveryStorageError):
 def running_in_lambda():
     """Return whether the application is running inside AWS Lambda."""
 
-    return bool(
-        os.getenv(
-            "AWS_LAMBDA_FUNCTION_NAME"
-        )
-    )
+    return bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 
 
 def get_table():
@@ -51,18 +46,12 @@ def get_table():
                 region_name=settings.aws_region,
             )
 
-            dynamodb = session.resource(
-                "dynamodb"
-            )
+            dynamodb = session.resource("dynamodb")
 
-        return dynamodb.Table(
-            settings.delivery_table_name
-        )
+        return dynamodb.Table(settings.delivery_table_name)
 
     except Exception as error:
-        raise DeliveryStorageError(
-            f"Could not connect to delivery-state table: {error}"
-        ) from error
+        raise DeliveryStorageError(f"Could not connect to delivery-state table: {error}") from error
 
 
 def get_last_delivered_session():
@@ -79,20 +68,15 @@ def get_last_delivered_session():
 
     except Exception as error:
         raise DeliveryStorageError(
-            f"Could not retrieve Morning Brief "
-            f"delivery state: {error}"
+            f"Could not retrieve Morning Brief delivery state: {error}"
         ) from error
 
-    item = response.get(
-        "Item"
-    )
+    item = response.get("Item")
 
     if not item:
         return None
 
-    return item.get(
-        "session_date"
-    )
+    return item.get("session_date")
 
 
 def record_delivery(
@@ -101,9 +85,7 @@ def record_delivery(
 ):
     """Record a successfully delivered Morning Brief session."""
 
-    delivered_at = datetime.now(
-        timezone.utc
-    ).isoformat()
+    delivered_at = datetime.now(timezone.utc).isoformat()
 
     try:
         get_table().update_item(
@@ -128,8 +110,7 @@ def record_delivery(
 
     except Exception as error:
         raise DeliveryStorageError(
-            f"Could not record Morning Brief "
-            f"delivery state: {error}"
+            f"Could not record Morning Brief delivery state: {error}"
         ) from error
 
 
@@ -161,6 +142,4 @@ def claim_delivery(session_date: str) -> None:
             raise DeliveryAlreadyClaimed(
                 f"Morning Brief for {session_date} is already claimed."
             ) from error
-        raise DeliveryStorageError(
-            f"Could not claim Morning Brief delivery: {error}"
-        ) from error
+        raise DeliveryStorageError(f"Could not claim Morning Brief delivery: {error}") from error
