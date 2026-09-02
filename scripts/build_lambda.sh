@@ -5,6 +5,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$PROJECT_ROOT/build/lambda"
 ZIP_PATH="$PROJECT_ROOT/build/portfolio-agent.zip"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 echo "Cleaning previous Lambda build..."
 rm -rf "$BUILD_DIR"
@@ -13,7 +14,7 @@ rm -f "$ZIP_PATH"
 mkdir -p "$BUILD_DIR"
 
 echo "Installing Lambda dependencies..."
-python -m pip install \
+"$PYTHON_BIN" -m pip install \
     -r "$PROJECT_ROOT/requirements.txt" \
     -t "$BUILD_DIR" \
     --platform manylinux2014_x86_64 \
@@ -41,6 +42,10 @@ echo "Creating deployment ZIP..."
     cd "$BUILD_DIR"
     zip -qr "$ZIP_PATH" .
 )
+
+echo "Validating Lambda imports..."
+PYTHONPATH="$BUILD_DIR" "$PYTHON_BIN" -c \
+    'from portfolio_agent.lambda_handler import lambda_handler'
 
 echo
 echo "Lambda package created:"

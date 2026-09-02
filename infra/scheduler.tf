@@ -1,5 +1,5 @@
 resource "aws_iam_role" "portfolio_agent_scheduler" {
-  name = "portfolio-agent-scheduler-role"
+  name = "${local.name_prefix}-scheduler-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -19,12 +19,12 @@ resource "aws_iam_role" "portfolio_agent_scheduler" {
 
   tags = {
     Project     = "Brokerage-Agent"
-    Environment = "development"
+    Environment = var.environment
   }
 }
 
 resource "aws_iam_role_policy" "portfolio_agent_scheduler" {
-  name = "portfolio-agent-scheduler-invoke"
+  name = "${local.name_prefix}-scheduler-invoke"
   role = aws_iam_role.portfolio_agent_scheduler.id
 
   policy = jsonencode({
@@ -46,7 +46,7 @@ resource "aws_iam_role_policy" "portfolio_agent_scheduler" {
 }
 
 resource "aws_scheduler_schedule" "portfolio_agent_morning_brief" {
-  name = "portfolio-agent-morning-brief-weekdays"
+  name = "${local.name_prefix}-morning-brief-weekdays"
 
   schedule_expression          = "cron(30 7 ? * MON-FRI *)"
   schedule_expression_timezone = "America/New_York"
@@ -58,9 +58,14 @@ resource "aws_scheduler_schedule" "portfolio_agent_morning_brief" {
   target {
     arn      = aws_lambda_function.portfolio_agent.arn
     role_arn = aws_iam_role.portfolio_agent_scheduler.arn
+
+    retry_policy {
+      maximum_event_age_in_seconds = 3600
+      maximum_retry_attempts       = 2
+    }
   }
 
-  state = "ENABLED"
+  state = var.environment == "staging" ? "DISABLED" : "ENABLED"
 
   depends_on = [
     aws_iam_role_policy.portfolio_agent_scheduler

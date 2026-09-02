@@ -1,144 +1,113 @@
-# Brokerage-Agent
+# Portfolio Agent
 
-# Portfolio Intelligence
+Portfolio Agent is a read-only portfolio intelligence service. It retrieves a personal portfolio from Charles Schwab, calculates deterministic performance analytics, gathers market news, uses OpenAI models to explain movements and evaluate thesis changes, renders a morning brief, and delivers it through Amazon SES.
 
-An automated portfolio intelligence platform that connects to the Charles Schwab API to analyze portfolio performance, explain market movements, monitor relevant events, and generate an evidence-backed Morning Brief before each trading day.
-
-The goal is simple: **tell me how my portfolio performed, why it moved, what changed overnight, what matters today, and whether any positions require attention.**
-
-## Example Morning Brief
-
-### Portfolio Snapshot
-
-**Portfolio Value:** $31,842
-**Previous Session:** +$284 (+0.90%)
-**S&P 500:** +0.42%
-**Relative Performance:** +0.48%
-
-### Yesterday's Drivers
-
-**Largest Contributors**
-
-| Position | Return | Impact |
-| -------- | -----: | -----: |
-| NVDA     |  +4.1% |  +$148 |
-| MSFT     |  +1.2% |   +$72 |
-| VTI      |  +0.6% |   +$43 |
-
-**Largest Detractors**
-
-| Position | Return | Impact |
-| -------- | -----: | -----: |
-| AMD      |  -3.2% |   -$51 |
-| DIS      |  -1.4% |   -$23 |
-
-**What happened:** Your portfolio outperformed the S&P 500 primarily due to semiconductor exposure. NVDA accounted for roughly 52% of the day's gains, while AMD partially offset performance.
-
-### Overnight Developments
-
-**NVDA — Export Restrictions**
-
-New restrictions affecting AI accelerator exports were announced after market close. NVDA is trading lower in the premarket.
-
-### Today's Market Setup
-
-* **8:30 AM:** CPI release
-* **11:00 AM:** NVDA investor conference
-* **4:00 PM:** AMD earnings
-
-### Positions Requiring Attention
-
-**AMD — REVIEW / HOLD**
-
-**Evidence:** AMD declined 3.2% versus a 2.6% decline in the semiconductor sector. No material company-specific filing was identified.
-
-**Risk:** Earnings are approaching and AMD represents 11.8% of the portfolio.
-
-**Suggested Action:** Hold and reevaluate following earnings or if portfolio concentration exceeds 12%.
-
-**Confidence:** Moderate
-
-### Portfolio Risk
-
-* Technology exposure: **47%**
-* Largest position: **NVDA — 14.2%**
-* Cash allocation: **6.7%**
-* Portfolio reporting earnings this week: **23%**
-
-*Data current as of 7:00 AM ET.*
-
----
-
-## Architecture
+## Runtime architecture
 
 ```text
-                     Scheduled Cloud Job
-                       ~7:00 AM ET
-                             │
-            ┌────────────────┼────────────────┐
-            ▼                ▼                ▼
-      Charles Schwab      Market Data     SEC / News
-           API               APIs           Sources
-            │                │                │
-            └────────────────┼────────────────┘
-                             ▼
-                    Portfolio Analytics
-                             │
-                 ┌───────────┴───────────┐
-                 ▼                       ▼
-        Performance Engine        Evidence Retrieval
-        • Daily returns           • SEC filings
-        • Attribution             • Earnings
-        • Benchmarking            • Financial news
-        • Concentration           • Market events
-                 │                       │
-                 └───────────┬───────────┘
-                             ▼
-                       Agent Workflow
-                  Evidence + Risk Analysis
-                             │
-                             ▼
-                     Morning Brief
-                             │
-                             ▼
-                           Email
+EventBridge Scheduler (7:30 AM ET, weekdays)
+                    |
+                    v
+AWS Lambda: portfolio_agent.lambda_handler.lambda_handler
+                    |
+       +------------+-------------+
+       |                          |
+       v                          v
+Schwab + market data       DynamoDB snapshots
+       |                          |
+       +------------+-------------+
+                    v
+       Deterministic analytics
+                    |
+       Finnhub + OpenAI research
+                    |
+       HTML brief + Amazon SES
+                    |
+       DynamoDB delivery state
 ```
 
-## Core Principles
+The system does not place trades. Portfolio calculations remain deterministic; models receive verified facts and produce explanations, thesis analysis, and concise considerations.
 
-* **Deterministic calculations:** LLMs explain financial metrics but do not calculate portfolio performance.
-* **Evidence-grounded analysis:** Recommendations are supported by market data, filings, earnings, and reputable news.
-* **Selective recommendations:** The system can recommend taking no action rather than generating unnecessary trades.
-* **Read-only brokerage access:** The platform analyzes the portfolio but does not autonomously execute trades.
+## Repository layout
 
-## Planned Stack
+```text
+src/portfolio_agent/
+  lambda_handler.py       AWS entry point
+  config.py               environment-backed settings
+  domain/                 portfolio, transactions, analytics
+  integrations/           Schwab, OAuth, Finnhub, SES, OpenAI boundaries
+  services/               research and brief orchestration
+  storage/                DynamoDB and local serialization adapters
+scripts/                  local utilities and Lambda packaging
+tests/                    unit tests with no external API calls
+infra/                    Terraform resources
+```
 
-**Python · FastAPI · Charles Schwab API · LangGraph · LLM API · AWS · Docker**
+## Local development
 
-## Schwab API connection check
+Use Python 3.13 and install development dependencies:
 
-`check_schwab.py` performs the initial OAuth login if needed, refreshes a cached
-token on later runs, and makes a read-only request to Schwab's account-number
-endpoint. It never places an order.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+```
 
-1. Create an application in the [Schwab Developer Portal](https://developer.schwab.com/), and make sure its callback URL matches the value you use below exactly.
-2. Export the credentials and callback URL:
+Set local-only values in `.env` or the shell. Never commit `.env`, OAuth tokens, portfolio snapshots, or raw Schwab responses.
 
-   ```bash
-   export SCHWAB_APP_KEY="your-app-key"
-   export SCHWAB_APP_SECRET="your-app-secret"
-   export SCHWAB_REDIRECT_URI="https://127.0.0.1:8182/callback"
-   ```
+Required values include:
 
-3. Run the check:
+```text
+SCHWAB_CLIENT_ID=...
+SCHWAB_CLIENT_SECRET=...
+SCHWAB_CALLBACK_URL=https://127.0.0.1:8182/callback
+OPENAI_API_KEY=...
+FINNHUB_API_KEY=...
+AWS_PROFILE=portfolio-dev
+AWS_REGION=us-east-2
+```
 
-   ```bash
-   python3 check_schwab.py
-   ```
+Initial Schwab authorization is interactive and should be performed locally:
 
-   A browser window opens. Sign in, then paste the complete URL from the
-   browser's address bar when it redirects to the callback. The token is saved
-   to `.schwab_token.json`, which is excluded from git.
+```bash
+PYTHONPATH=src python scripts/schwab_login.py
+PYTHONPATH=src python scripts/check_schwab.py
+```
 
-The refresh token is subject to Schwab's expiration policy. If it expires,
-remove `.schwab_token.json` and run the script again to authorize.
+The resulting OAuth state is stored in `tokens.json` locally or in the `portfolio-agent/schwab` Secrets Manager secret in Lambda. Lambda refreshes the token without opening a browser.
+
+## Tests and quality checks
+
+```bash
+pytest
+ruff check src tests scripts
+python -m compileall -q src
+```
+
+## Lambda deployment
+
+Build the deployment package from the repository root:
+
+```bash
+./scripts/build_lambda.sh
+```
+
+The package handler is `portfolio_agent.lambda_handler.lambda_handler`. Terraform expects the generated archive at `build/portfolio-agent.zip`.
+
+Apply infrastructure from `infra/` using the intended AWS credentials and a configured remote Terraform backend before using a shared or production environment:
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+The current Terraform configuration is a development deployment in `us-east-2`. Before production use, provide separate state, names, email identities, and credentials for each environment.
+
+## Operational notes
+
+- DynamoDB stores portfolio snapshots, thesis history, and delivery state.
+- A portfolio snapshot is saved on every successful analytics run and is used as the next historical baseline.
+- Delivery state is claimed atomically to prevent concurrent Lambda invocations from sending duplicate briefs.
+- Secrets are loaded from Secrets Manager at invocation time; credentials and raw financial data are not logged.
+- CloudWatch logs are retained for 30 days by the supplied Terraform configuration.

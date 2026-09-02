@@ -7,14 +7,50 @@ terraform {
   }
 }
 
+variable "environment" {
+  description = "Deployment environment name."
+  type        = string
+  default     = "development"
+}
+
+variable "aws_profile" {
+  description = "Local AWS CLI profile used by Terraform."
+  type        = string
+  default     = "portfolio-dev"
+}
+
+variable "sender_email" {
+  description = "Verified SES sender address."
+  type        = string
+  default     = "drewmack04@icloud.com"
+}
+
+variable "recipient_email" {
+  description = "Email address receiving the brief."
+  type        = string
+  default     = "drewmack04@icloud.com"
+}
+
+locals {
+  name_prefix = var.environment == "development" ? "portfolio-agent" : "portfolio-agent-${var.environment}"
+  common_tags = {
+    Project     = "Brokerage-Agent"
+    Environment = var.environment
+  }
+}
+
 provider "aws" {
   region  = "us-east-2"
-  profile = "portfolio-dev"
+  profile = var.aws_profile
 }
 
 resource "aws_dynamodb_table" "portfolio_snapshots" {
-  name         = "portfolio-agent-snapshots"
+  name         = "${local.name_prefix}-snapshots"
   billing_mode = "PAY_PER_REQUEST"
+
+  point_in_time_recovery {
+    enabled = true
+  }
 
   hash_key  = "portfolio_id"
   range_key = "timestamp"
@@ -31,13 +67,17 @@ resource "aws_dynamodb_table" "portfolio_snapshots" {
 
   tags = {
     Project     = "Brokerage-Agent"
-    Environment = "development"
+    Environment = var.environment
   }
 }
 
 resource "aws_dynamodb_table" "portfolio_theses" {
-  name         = "portfolio-agent-theses"
+  name         = "${local.name_prefix}-theses"
   billing_mode = "PAY_PER_REQUEST"
+
+  point_in_time_recovery {
+    enabled = true
+  }
 
   hash_key  = "symbol"
   range_key = "timestamp"
@@ -54,13 +94,22 @@ resource "aws_dynamodb_table" "portfolio_theses" {
 
   tags = {
     Project     = "Brokerage-Agent"
-    Environment = "development"
+    Environment = var.environment
   }
 }
 
 resource "aws_dynamodb_table" "portfolio_delivery_state" {
-  name         = "portfolio-agent-delivery-state"
+  name         = "${local.name_prefix}-delivery-state"
   billing_mode = "PAY_PER_REQUEST"
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
 
   hash_key = "delivery_id"
 
@@ -71,12 +120,12 @@ resource "aws_dynamodb_table" "portfolio_delivery_state" {
 
   tags = {
     Project     = "Brokerage-Agent"
-    Environment = "development"
+    Environment = var.environment
   }
 }
 
 resource "aws_iam_role" "portfolio_agent_lambda" {
-  name = "portfolio-agent-lambda-role"
+  name = "${local.name_prefix}-lambda-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -96,7 +145,7 @@ resource "aws_iam_role" "portfolio_agent_lambda" {
 
   tags = {
     Project     = "Brokerage-Agent"
-    Environment = "development"
+    Environment = var.environment
   }
 }
 
@@ -106,7 +155,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 }
 
 resource "aws_iam_role_policy" "portfolio_agent_permissions" {
-  name = "portfolio-agent-permissions"
+  name = "${local.name_prefix}-permissions"
   role = aws_iam_role.portfolio_agent_lambda.id
 
   policy = jsonencode({
@@ -160,10 +209,10 @@ resource "aws_iam_role_policy" "portfolio_agent_permissions" {
 }
 
 resource "aws_lambda_function" "portfolio_agent" {
-  function_name = "portfolio-agent-morning-brief"
+  function_name = "${local.name_prefix}-morning-brief"
 
   role    = aws_iam_role.portfolio_agent_lambda.arn
-  handler = "lambda_handler.lambda_handler"
+  handler = "portfolio_agent.lambda_handler.lambda_handler"
 
   runtime       = "python3.13"
   architectures = ["x86_64"]
@@ -177,8 +226,12 @@ resource "aws_lambda_function" "portfolio_agent" {
   environment {
     variables = {
       API_KEYS_SECRET_NAME      = "portfolio-agent/api-keys"
-      PORTFOLIO_SENDER_EMAIL    = "drewmack04@icloud.com"
-      PORTFOLIO_RECIPIENT_EMAIL = "drewmack04@icloud.com"
+      SCHWAB_SECRET_NAME        = "portfolio-agent/schwab"
+      SNAPSHOTS_TABLE_NAME      = aws_dynamodb_table.portfolio_snapshots.name
+      THESES_TABLE_NAME         = aws_dynamodb_table.portfolio_theses.name
+      DELIVERY_TABLE_NAME       = aws_dynamodb_table.portfolio_delivery_state.name
+      PORTFOLIO_SENDER_EMAIL    = var.sender_email
+      PORTFOLIO_RECIPIENT_EMAIL = var.recipient_email
     }
   }
 
@@ -189,8 +242,32 @@ resource "aws_lambda_function" "portfolio_agent" {
 
   tags = {
     Project     = "Brokerage-Agent"
-    Environment = "development"
+    Environment = var.environment
   }
+}
+
+resource "aws_cloudwatch_log_group" "portfolio_agent" {
+  name              = "/aws/lambda/${aws_lambda_function.portfolio_agent.function_name}"
+  retention_in_days = 30
+
+  tags = {
+    Project     = "Brokerage-Agent"
+    Environment = var.environment
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "portfolio_agent_errors" {
+  alarm_name          = "${local.name_prefix}-lambda-errors"
+  alarm_description   = "Portfolio Agent Lambda reported an error."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.portfolio_agent.function_name }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
 }
 
 output "lambda_function_name" {

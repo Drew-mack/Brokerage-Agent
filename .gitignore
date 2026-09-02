@@ -16,3 +16,11 @@ tokens.json
 __pycache__/
 
 build/
+output/
+
+# Test and tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
