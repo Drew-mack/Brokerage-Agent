@@ -1,113 +1,210 @@
-# Portfolio Agent
+# Brokerage Agent
 
-Portfolio Agent is a read-only portfolio intelligence service. It retrieves a personal portfolio from Charles Schwab, calculates deterministic performance analytics, gathers market news, uses OpenAI models to explain movements and evaluate thesis changes, renders a morning brief, and delivers it through Amazon SES.
+An automated portfolio intelligence system that analyzes my brokerage account after each trading session and delivers a personalized morning brief with portfolio performance, market context, forward-looking research, and actionable insights.
 
-## Runtime architecture
+The system combines the **Charles Schwab API**, deterministic Python analytics, financial/news data, LLM-based research agents, and a serverless AWS architecture. It runs automatically every weekday morning and emails a concise report before the market opens.
 
-```text
-EventBridge Scheduler (7:30 AM ET, weekdays)
-                    |
-                    v
-AWS Lambda: portfolio_agent.lambda_handler.lambda_handler
-                    |
-       +------------+-------------+
-       |                          |
-       v                          v
-Schwab + market data       DynamoDB snapshots
-       |                          |
-       +------------+-------------+
-                    v
-       Deterministic analytics
-                    |
-       Finnhub + OpenAI research
-                    |
-       HTML brief + Amazon SES
-                    |
-       DynamoDB delivery state
-```
+## Example Morning Brief
 
-The system does not place trades. Portfolio calculations remain deterministic; models receive verified facts and produce explanations, thesis analysis, and concise considerations.
-
-## Repository layout
+Each report is designed to be readable in roughly 60–90 seconds.
 
 ```text
-src/portfolio_agent/
-  lambda_handler.py       AWS entry point
-  config.py               environment-backed settings
-  domain/                 portfolio, transactions, analytics
-  integrations/           Schwab, OAuth, Finnhub, SES, OpenAI boundaries
-  services/               research and brief orchestration
-  storage/                DynamoDB and local serialization adapters
-scripts/                  local utilities and Lambda packaging
-tests/                    unit tests with no external API calls
-infra/                    Terraform resources
+MORNING BRIEF
+
+PORTFOLIO SNAPSHOT
+
+Portfolio Value        $19,675.39
+Daily Change               -$1.35
+Portfolio Return           -0.01%
+S&P 500 / VOO              -0.33%
+Relative Performance       +0.33%
+
+CHANGES
+
+NVDA was the largest positive contributor, gaining 1.48% and
+contributing approximately $55 to the portfolio.
+
+VOO declined 0.33%, creating the largest negative contribution
+because of its significant portfolio weight.
+
+The portfolio ultimately outperformed its benchmark by 0.33%.
+
+AGENTIC ADVICE
+
+NVDA — Moderately Bullish | 19.2% portfolio weight
+
+Recent developments remain supportive of the existing thesis,
+although the position's portfolio weight makes future catalysts
+particularly important to monitor.
+
+Watch: upcoming company events, earnings developments, and
+material changes to the existing investment thesis.
 ```
 
-## Local development
+## How It Works
 
-Use Python 3.13 and install development dependencies:
+Portfolio values, returns, benchmark performance, position contributions, and transaction activity are calculated deterministically in Python. LLM agents then research relevant developments, evaluate existing investment theses, identify upcoming catalysts, and synthesize the results into a short Morning Brief.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-```
-
-Set local-only values in `.env` or the shell. Never commit `.env`, OAuth tokens, portfolio snapshots, or raw Schwab responses.
-
-Required values include:
+## Architecture
 
 ```text
-SCHWAB_CLIENT_ID=...
-SCHWAB_CLIENT_SECRET=...
-SCHWAB_CALLBACK_URL=https://127.0.0.1:8182/callback
-OPENAI_API_KEY=...
-FINNHUB_API_KEY=...
-AWS_PROFILE=portfolio-dev
-AWS_REGION=us-east-2
+                    ┌──────────────────────────┐
+                    │   EventBridge Scheduler  │
+                    │   7:30 AM ET Weekdays    │
+                    └─────────────┬────────────┘
+                                  │
+                                  ▼
+                    ┌──────────────────────────┐
+                    │        AWS Lambda        │
+                    │    Morning Brief Job     │
+                    └─────────────┬────────────┘
+                                  │
+                ┌─────────────────┴─────────────────┐
+                │                                   │
+                ▼                                   ▼
+     ┌─────────────────────┐             ┌─────────────────────┐
+     │   Secrets Manager   │             │    Charles Schwab   │
+     │ API Keys + OAuth    │             │     Trader API      │
+     └─────────────────────┘             └──────────┬──────────┘
+                                                   │
+                                                   ▼
+                                      ┌─────────────────────────┐
+                                      │ Deterministic Analytics │
+                                      │                         │
+                                      │ • Portfolio value       │
+                                      │ • Daily return          │
+                                      │ • Benchmark return      │
+                                      │ • Contributions         │
+                                      │ • Transactions          │
+                                      │ • Session resolution    │
+                                      └────────────┬────────────┘
+                                                   │
+                                                   ▼
+                                      ┌─────────────────────────┐
+                                      │     Research Layer      │
+                                      │                         │
+                                      │ • Market/news research  │
+                                      │ • Movement analysis     │
+                                      │ • Forward catalysts     │
+                                      │ • Thesis comparison     │
+                                      └────────────┬────────────┘
+                                                   │
+                         ┌─────────────────────────┴──────────┐
+                         │                                    │
+                         ▼                                    ▼
+              ┌─────────────────────┐             ┌─────────────────────┐
+              │      DynamoDB       │             │   Portfolio Advisor │
+              │                     │             │                     │
+              │ • Snapshots         │             │ Position-level      │
+              │ • Investment theses │             │ reasoning and       │
+              │ • Delivery state    │             │ recommendations     │
+              └─────────────────────┘             └──────────┬──────────┘
+                                                             │
+                                                             ▼
+                                                  ┌─────────────────────┐
+                                                  │   Editorial Agent   │
+                                                  │                     │
+                                                  │ Prioritize +        │
+                                                  │ synthesize findings │
+                                                  └──────────┬──────────┘
+                                                             │
+                                                             ▼
+                                                  ┌─────────────────────┐
+                                                  │   HTML Renderer     │
+                                                  └──────────┬──────────┘
+                                                             │
+                                                             ▼
+                                                  ┌─────────────────────┐
+                                                  │     Amazon SES      │
+                                                  │    Morning Email    │
+                                                  └─────────────────────┘
 ```
 
-Initial Schwab authorization is interactive and should be performed locally:
+### Pipeline
 
-```bash
-PYTHONPATH=src python scripts/schwab_login.py
-PYTHONPATH=src python scripts/check_schwab.py
+**1. Portfolio Analytics**  
+The Schwab API provides account, position, transaction, and market data. Python determines the latest completed trading session and calculates portfolio return, benchmark return, relative performance, position weights, and contributors/detractors.
+
+**2. Research & Reasoning**  
+The system researches meaningful portfolio movements and upcoming company-specific catalysts. Previous investment theses are stored in DynamoDB, allowing new information to be evaluated against prior conclusions rather than treating every run independently.
+
+**3. Editorial Agent**  
+A final LLM pass prioritizes the information and converts the larger internal analysis into two concise sections: **CHANGES**, explaining what affected the portfolio, and **AGENTIC ADVICE**, explaining what deserves attention going forward.
+
+**4. Automated Delivery**  
+The brief is rendered as responsive HTML and sent through Amazon SES. EventBridge Scheduler triggers the Lambda at **7:30 AM ET every weekday**.
+
+## Reliability
+
+The application stores the last successfully delivered trading session in DynamoDB.
+
+Before performing research, each execution checks whether that session has already been delivered:
+
+```text
+New completed session?
+        │
+    ┌───┴───┐
+   No      Yes
+    │        │
+  Exit    Research
+             │
+          Build Brief
+             │
+          Send Email
+             │
+       Record Delivery
 ```
 
-The resulting OAuth state is stored in `tokens.json` locally or in the `portfolio-agent/schwab` Secrets Manager secret in Lambda. Lambda refreshes the token without opening a browser.
+This prevents duplicate emails and unnecessary API/LLM usage during retries, weekends, market holidays, or accidental repeated invocations.
 
-## Tests and quality checks
+## Architecture & Tech Stack
 
-```bash
-pytest
-ruff check src tests scripts
-python -m compileall -q src
+| Component | Technology |
+|---|---|
+| Brokerage Data | Charles Schwab Trader API |
+| Application | Python |
+| AI / Reasoning | OpenAI API |
+| Market Research | Finnhub |
+| Compute | AWS Lambda |
+| Persistence | DynamoDB |
+| Secrets | AWS Secrets Manager |
+| Scheduling | EventBridge Scheduler |
+| Email | Amazon SES |
+| Observability | CloudWatch |
+| Infrastructure | Terraform |
+
+The entire production environment is defined with Terraform. Application updates follow a simple deployment workflow:
+
+```text
+Change → Test → Build Lambda → Terraform Plan → Apply
 ```
 
-## Lambda deployment
 
-Build the deployment package from the repository root:
+## Project Structure
 
-```bash
-./scripts/build_lambda.sh
+```text
+src/
+├── analytics.py              # Portfolio calculations
+├── lambda_handler.py         # AWS entry point
+├── schwab_client.py          # Brokerage integration
+├── brief/                    # Brief generation + HTML rendering
+├── research/                 # Research and AI agents
+├── storage/                  # DynamoDB persistence
+├── auth_storage/             # Secrets/OAuth storage
+└── mailer/                   # SES delivery
+
+infra/
+├── main.tf                   # Core AWS infrastructure
+└── scheduler.tf              # Automated weekday execution
+
+scripts/
+└── build_lambda.sh           # Lambda packaging
 ```
 
-The package handler is `portfolio_agent.lambda_handler.lambda_handler`. Terraform expects the generated archive at `build/portfolio-agent.zip`.
+## Status
 
-Apply infrastructure from `infra/` using the intended AWS credentials and a configured remote Terraform backend before using a shared or production environment:
+**V1 is deployed and fully automated.**
 
-```bash
-terraform init
-terraform plan
-terraform apply
-```
+Every weekday at 7:30 AM Eastern, AWS invokes the application, identifies the latest completed market session, analyzes the portfolio, performs relevant research, generates the Morning Brief, emails it, and persists the resulting state for the next execution.
 
-The current Terraform configuration is a development deployment in `us-east-2`. Before production use, provide separate state, names, email identities, and credentials for each environment.
-
-## Operational notes
-
-- DynamoDB stores portfolio snapshots, thesis history, and delivery state.
-- A portfolio snapshot is saved on every successful analytics run and is used as the next historical baseline.
-- Delivery state is claimed atomically to prevent concurrent Lambda invocations from sending duplicate briefs.
-- Secrets are loaded from Secrets Manager at invocation time; credentials and raw financial data are not logged.
-- CloudWatch logs are retained for 30 days by the supplied Terraform configuration.
+Future improvements include richer portfolio risk analysis, economic/earnings calendar integration, improved OAuth reauthorization, failure alerting, and expanded historical performance analysis.
