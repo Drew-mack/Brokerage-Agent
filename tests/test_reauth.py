@@ -1,8 +1,7 @@
 from unittest.mock import patch
 
 from portfolio_agent.integrations.schwab_auth import build_authorization_url
-from portfolio_agent.reauth_handler import callback_handler
-from portfolio_agent.reauth_handler import reminder_handler
+from portfolio_agent.reauth_handler import callback_handler, reminder_handler
 
 
 def test_authorization_url_contains_state():
@@ -36,7 +35,10 @@ def test_reminder_sends_recovery_link_after_expiration():
     expired = {"refresh_token_created_at": 1}
     with (
         patch("portfolio_agent.integrations.schwab_auth.load_tokens", return_value=expired),
-        patch("portfolio_agent.integrations.schwab_auth.refresh_token_is_valid", return_value=False),
+        patch(
+            "portfolio_agent.integrations.schwab_auth.refresh_token_is_valid",
+            return_value=False,
+        ),
         patch("portfolio_agent.reauth_handler.reminder_was_sent", return_value=False),
         patch("portfolio_agent.reauth_handler.create_state", return_value="state"),
         patch("portfolio_agent.reauth_handler.build_authorization_url", return_value="https://example.com/auth"),
