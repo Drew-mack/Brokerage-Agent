@@ -4,6 +4,12 @@ An automated portfolio intelligence system that analyzes my brokerage account af
 
 The system combines the **Charles Schwab API**, deterministic Python analytics, financial/news data, LLM-based research agents, and a serverless AWS architecture. It runs automatically every weekday morning and emails a concise report before the market opens.
 
+## Schwab reauthorization
+
+Schwab refresh authorizations currently expire after approximately seven days. A separate scheduled Lambda checks each evening and, when authorization is within 24 hours of expiry, emails a one-time reauthorization link. Schwab redirects to an API Gateway HTTPS callback that exchanges the code and updates Secrets Manager.
+
+This uses API Gateway's default URL and requires no Porkbun DNS or custom domain. After deployment, run `terraform -chdir=infra output -raw schwab_callback_url` and register that exact URL in the Schwab developer portal. Deployed Lambdas receive the URL from Terraform; local login still uses `SCHWAB_CALLBACK_URL`.
+
 ## Example Morning Brief
 
 Each report is designed to be readable in roughly 60–90 seconds.
@@ -184,21 +190,22 @@ Change → Test → Build Lambda → Terraform Plan → Apply
 
 ```text
 src/
-├── analytics.py              # Portfolio calculations
-├── lambda_handler.py         # AWS entry point
-├── schwab_client.py          # Brokerage integration
-├── brief/                    # Brief generation + HTML rendering
-├── research/                 # Research and AI agents
-├── storage/                  # DynamoDB persistence
-├── auth_storage/             # Secrets/OAuth storage
-└── mailer/                   # SES delivery
+└── portfolio_agent/
+    ├── domain/               # Portfolio calculations and models
+    ├── integrations/         # Schwab, Secrets Manager, and SES
+    ├── services/             # Research and brief generation
+    ├── storage/              # DynamoDB persistence
+    ├── lambda_handler.py     # Morning brief entry point
+    └── reauth_handler.py     # OAuth reminder and callback
 
 infra/
 ├── main.tf                   # Core AWS infrastructure
 └── scheduler.tf              # Automated weekday execution
 
 scripts/
-└── build_lambda.sh           # Lambda packaging
+├── build_lambda.sh           # Lambda packaging
+├── schwab_login.py           # Local OAuth fallback
+└── check_*.py                # Connectivity checks
 ```
 
 ## Status
@@ -207,4 +214,6 @@ scripts/
 
 Every weekday at 7:30 AM Eastern, AWS invokes the application, identifies the latest completed market session, analyzes the portfolio, performs relevant research, generates the Morning Brief, emails it, and persists the resulting state for the next execution.
 
-Future improvements include richer portfolio risk analysis, economic/earnings calendar integration, improved OAuth reauthorization, failure alerting, and expanded historical performance analysis.
+The reauthorization reminder runs daily at 6:00 PM Eastern and normally sends during the final 24 hours. It also sends a recovery link when the schedule was missed or authorization has already expired. OAuth state is stored in a TTL-enabled DynamoDB table and consumed after one callback.
+
+For reliable delivery, use a verified address on a domain you control as `sender_email` (for example, `portfolio-agent@example.com`). In Amazon SES, verify the domain and enable Easy DKIM, then publish the DKIM CNAME records and an SPF/DMARC policy in DNS. Sending through SES with a personal iCloud address as the `From` address can be accepted by SES but still be classified as junk by iCloud because the sending-domain authentication is not aligned. SES cannot guarantee inbox placement.

@@ -22,7 +22,7 @@ variable "aws_profile" {
 variable "sender_email" {
   description = "Verified SES sender address."
   type        = string
-  default     = "drewmack04@icloud.com"
+  default     = "brief@andrewmack.dev"
 }
 
 variable "recipient_email" {
@@ -122,6 +122,24 @@ resource "aws_dynamodb_table" "portfolio_delivery_state" {
     Project     = "Brokerage-Agent"
     Environment = var.environment
   }
+}
+
+resource "aws_dynamodb_table" "reauth_state" {
+  name         = "${local.name_prefix}-reauth-state"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "key"
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  attribute {
+    name = "key"
+    type = "S"
+  }
+
+  tags = local.common_tags
 }
 
 resource "aws_iam_role" "portfolio_agent_lambda" {
@@ -246,6 +264,136 @@ resource "aws_lambda_function" "portfolio_agent" {
   }
 }
 
+resource "aws_iam_role" "reauth_lambda" {
+  name = "${local.name_prefix}-reauth-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "reauth_lambda_basic" {
+  role       = aws_iam_role.reauth_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "reauth_lambda_permissions" {
+  name = "${local.name_prefix}-reauth-permissions"
+  role = aws_iam_role.reauth_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReauthState"
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]
+        Resource = aws_dynamodb_table.reauth_state.arn
+      },
+      {
+        Sid      = "SchwabSecret"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue"]
+        Resource = "arn:aws:secretsmanager:us-east-2:*:secret:portfolio-agent/schwab-*"
+      },
+      {
+        Sid      = "ReauthEmail"
+        Effect   = "Allow"
+        Action   = ["ses:SendEmail"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_function" "reauth_callback" {
+  function_name    = "${local.name_prefix}-schwab-callback"
+  role             = aws_iam_role.reauth_lambda.arn
+  handler          = "portfolio_agent.reauth_handler.callback_handler"
+  runtime          = "python3.13"
+  architectures    = ["x86_64"]
+  filename         = "${path.module}/../build/portfolio-agent.zip"
+  source_code_hash = filebase64sha256("${path.module}/../build/portfolio-agent.zip")
+  timeout          = 30
+  memory_size      = 256
+
+  environment {
+    variables = {
+      SCHWAB_SECRET_NAME  = "portfolio-agent/schwab"
+      REAUTH_TABLE_NAME   = aws_dynamodb_table.reauth_state.name
+      SCHWAB_CALLBACK_URL = "https://${aws_apigatewayv2_api.reauth.id}.execute-api.us-east-2.amazonaws.com/schwab/callback"
+    }
+  }
+
+  depends_on = [aws_iam_role_policy_attachment.reauth_lambda_basic, aws_iam_role_policy.reauth_lambda_permissions]
+  tags       = local.common_tags
+}
+
+resource "aws_lambda_function" "reauth_reminder" {
+  function_name    = "${local.name_prefix}-schwab-reminder"
+  role             = aws_iam_role.reauth_lambda.arn
+  handler          = "portfolio_agent.reauth_handler.reminder_handler"
+  runtime          = "python3.13"
+  architectures    = ["x86_64"]
+  filename         = "${path.module}/../build/portfolio-agent.zip"
+  source_code_hash = filebase64sha256("${path.module}/../build/portfolio-agent.zip")
+  timeout          = 30
+  memory_size      = 256
+
+  environment {
+    variables = {
+      SCHWAB_SECRET_NAME        = "portfolio-agent/schwab"
+      REAUTH_TABLE_NAME         = aws_dynamodb_table.reauth_state.name
+      SCHWAB_CALLBACK_URL       = "https://${aws_apigatewayv2_api.reauth.id}.execute-api.us-east-2.amazonaws.com/schwab/callback"
+      PORTFOLIO_SENDER_EMAIL    = var.sender_email
+      PORTFOLIO_RECIPIENT_EMAIL = var.recipient_email
+    }
+  }
+
+  depends_on = [aws_iam_role_policy_attachment.reauth_lambda_basic, aws_iam_role_policy.reauth_lambda_permissions]
+  tags       = local.common_tags
+}
+
+resource "aws_apigatewayv2_api" "reauth" {
+  name          = "${local.name_prefix}-schwab-reauth"
+  protocol_type = "HTTP"
+  tags          = local.common_tags
+}
+
+resource "aws_apigatewayv2_integration" "reauth_callback" {
+  api_id                 = aws_apigatewayv2_api.reauth.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.reauth_callback.invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "reauth_callback" {
+  api_id    = aws_apigatewayv2_api.reauth.id
+  route_key = "GET /schwab/callback"
+  target    = "integrations/${aws_apigatewayv2_integration.reauth_callback.id}"
+}
+
+resource "aws_apigatewayv2_stage" "reauth" {
+  api_id      = aws_apigatewayv2_api.reauth.id
+  name        = "$default"
+  auto_deploy = true
+  tags        = local.common_tags
+}
+
+resource "aws_lambda_permission" "reauth_callback_api" {
+  statement_id  = "AllowApiGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.reauth_callback.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.reauth.execution_arn}/*/*"
+}
+
 resource "aws_cloudwatch_log_group" "portfolio_agent" {
   name              = "/aws/lambda/${aws_lambda_function.portfolio_agent.function_name}"
   retention_in_days = 30
@@ -276,4 +424,8 @@ output "lambda_function_name" {
 
 output "lambda_role_arn" {
   value = aws_iam_role.portfolio_agent_lambda.arn
+}
+
+output "schwab_callback_url" {
+  value = "https://${aws_apigatewayv2_api.reauth.id}.execute-api.us-east-2.amazonaws.com/schwab/callback"
 }

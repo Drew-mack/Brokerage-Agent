@@ -44,7 +44,9 @@ def running_in_lambda():
 def get_secret_storage():
     """Create the Secrets Manager token storage backend."""
 
-    return SecretsTokenStorage(secret_name="portfolio-agent/schwab")
+    return SecretsTokenStorage(
+        secret_name=os.getenv("SCHWAB_SECRET_NAME", "portfolio-agent/schwab")
+    )
 
 
 def load_config():
@@ -60,7 +62,7 @@ def load_config():
         return {
             "client_id": config.get("client_id"),
             "client_secret": config.get("client_secret"),
-            "callback_url": config.get("callback_url"),
+            "callback_url": os.getenv("SCHWAB_CALLBACK_URL") or config.get("callback_url"),
         }
 
     return {
@@ -270,18 +272,23 @@ def get_access_token():
     return refresh_access_token(tokens)
 
 
-def build_authorization_url():
+def build_authorization_url(state=None):
     """Build the URL used to begin Schwab OAuth."""
 
     config = validate_config()
 
-    return (
+    url = (
         f"{AUTH_URL}"
         f"?client_id="
         f"{quote(config['client_id'], safe='')}"
         f"&redirect_uri="
         f"{quote(config['callback_url'], safe='')}"
     )
+
+    if state:
+        url += f"&state={quote(state, safe='')}"
+
+    return url
 
 
 def extract_authorization_code(
@@ -302,7 +309,7 @@ def extract_authorization_code(
     return unquote(query["code"][0])
 
 
-def exchange_code_for_tokens(code):
+def exchange_code_for_tokens(code, callback_url=None):
     """
     Exchange a Schwab authorization code for
     access and refresh tokens.
@@ -320,7 +327,7 @@ def exchange_code_for_tokens(code):
         data={
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": config["callback_url"],
+            "redirect_uri": callback_url or config["callback_url"],
         },
         timeout=30,
     )
